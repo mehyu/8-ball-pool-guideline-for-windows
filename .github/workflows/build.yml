@@ -2,9 +2,10 @@ name: Build and Package
 
 on:
   push:
-    branches: [main, master]
+    branches: ["**"]
   pull_request:
-    branches: [main, master]
+    branches: ["**"]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -45,7 +46,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create GitHub Release
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}

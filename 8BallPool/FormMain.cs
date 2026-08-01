@@ -1,12 +1,32 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace _8BallPool
 {
     public partial class FormMain : Form
     {
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TRANSPARENT = 0x00000020;
+        private const int WS_EX_LAYERED = 0x00080000;
+
+        private const int VK_RBUTTON = 0x02;
+        private const int VK_SPACE = 0x20;
+        private const int VK_F1 = 0x70;
+        private const int VK_UP = 0x26;
+        private const int VK_DOWN = 0x28;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
         private const int ReferenceBallSize = 25;
         private const int BallCenterDotSize = 2;
         private const int BallHitAreaRadius = 15;
@@ -17,37 +37,115 @@ namespace _8BallPool
 
         private Point lastBallPosition;
         private bool isDragging;
-        private bool isTransparent;
+        private bool isClickThrough;
+
+        private bool wasRightDown;
+        private bool wasSpaceDown;
+        private bool wasF1Down;
+        private bool wasUpDown;
+        private bool wasDownDown;
+
+        private Timer updateTimer;
 
         public FormMain()
         {
             InitializeComponent();
 
-            this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.AllPaintingInWmPaint | 
+                           ControlStyles.UserPaint | 
+                           ControlStyles.OptimizedDoubleBuffer | 
+                           ControlStyles.ResizeRedraw, true);
+            this.UpdateStyles();
 
             Pocket.Initialize();
             lastBallPosition = new Point(this.Width / 2, this.Height / 2);
             isDragging = false;
-            isTransparent = true;
+
+            this.Opacity = 0.65D; // 15% higher opacity than default 0.50D
+
+            updateTimer = new Timer();
+            updateTimer.Interval = 16; // ~60 FPS update loop
+            updateTimer.Tick += UpdateTimer_Tick;
+            updateTimer.Start();
         }
 
-        protected override CreateParams CreateParams
+        protected override void OnHandleCreated(EventArgs e)
         {
-            get
+            base.OnHandleCreated(e);
+            SetClickThrough(true); // Enable click-through by default so user mouse clicks pass straight to game
+        }
+
+        private void SetClickThrough(bool enable)
+        {
+            isClickThrough = enable;
+            int exStyle = GetWindowLong(this.Handle, GWL_EXSTYLE);
+            if (enable)
             {
-                CreateParams cp = base.CreateParams;
-                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED — flicker-free without conflicting with layered windows
-                return cp;
+                exStyle |= WS_EX_TRANSPARENT | WS_EX_LAYERED;
             }
+            else
+            {
+                exStyle &= ~WS_EX_TRANSPARENT;
+            }
+            SetWindowLong(this.Handle, GWL_EXSTYLE, exStyle);
+            this.Invalidate();
+        }
+
+        private void UpdateTimer_Tick(object sender, EventArgs e)
+        {
+            // Right-Click to snap ball position directly to cursor
+            bool isRightDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+            if (isRightDown && !wasRightDown)
+            {
+                Point cursorPos = Cursor.Position;
+                Point clientPos = this.PointToClient(cursorPos);
+                if (this.ClientRectangle.Contains(clientPos))
+                {
+                    lastBallPosition = clientPos;
+                    ClampBallPosition();
+                    this.Invalidate();
+                }
+            }
+            wasRightDown = isRightDown;
+
+            // Space / F1 to toggle Click-Through Mode
+            bool isSpaceDown = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+            bool isF1Down = (GetAsyncKeyState(VK_F1) & 0x8000) != 0;
+            if ((isSpaceDown && !wasSpaceDown) || (isF1Down && !wasF1Down))
+            {
+                SetClickThrough(!isClickThrough);
+            }
+            wasSpaceDown = isSpaceDown;
+            wasF1Down = isF1Down;
+
+            // Up / Down arrow keys for live opacity control
+            bool isUpDown = (GetAsyncKeyState(VK_UP) & 0x8000) != 0;
+            if (isUpDown && !wasUpDown)
+            {
+                if (this.Opacity < 1.0D)
+                    this.Opacity = Math.Min(1.0D, Math.Round(this.Opacity + 0.05D, 2));
+            }
+            wasUpDown = isUpDown;
+
+            bool isDownDown = (GetAsyncKeyState(VK_DOWN) & 0x8000) != 0;
+            if (isDownDown && !wasDownDown)
+            {
+                if (this.Opacity > 0.10D)
+                    this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2));
+            }
+            wasDownDown = isDownDown;
         }
 
         private void FormMain_Paint(object sender, PaintEventArgs e)
         {
             Pocket.UpdatePoints(this.Width, this.Height);
-            this.Text = "8 Ball Pool Guidelines (" + this.Width + "x" + this.Height + ")";
+            string modeText = isClickThrough ? " [Click-Through ON - Right Click to Move Ball - Press Space/F1 to toggle]" : " [Click-Through OFF - Press Space/F1 to toggle]";
+            this.Text = "8 Ball Pool Guidelines (" + this.Width + "x" + this.Height + ")" + modeText;
 
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
             DrawCorners(g);
             DrawPockets(g);
@@ -125,7 +223,7 @@ namespace _8BallPool
             Rectangle rectOutside = new Rectangle(pt.X - halfBall, pt.Y - halfBall, ReferenceBallSize, ReferenceBallSize);
             Rectangle rectInside = new Rectangle(pt.X - halfDot, pt.Y - halfDot, BallCenterDotSize, BallCenterDotSize);
 
-            using (Pen penOutside = new Pen(Color.FromArgb(60, 144, 144, 144), 1))
+            using (Pen penOutside = new Pen(Color.FromArgb(120, 144, 144, 144), 1))
             using (Pen penInside = new Pen(Color.FromArgb(250, 0, 0, 0), 2))
             {
                 g.DrawEllipse(penOutside, rectOutside);
@@ -135,7 +233,7 @@ namespace _8BallPool
 
         private void DrawGuideLines(Graphics g)
         {
-            using (Pen pen = new Pen(Color.FromArgb(60, 144, 144, 144), GuideLineThickness))
+            using (Pen pen = new Pen(Color.FromArgb(120, 144, 144, 144), GuideLineThickness))
             {
                 foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
                 {
@@ -151,6 +249,14 @@ namespace _8BallPool
 
         private void FormMain_MouseDown(object sender, MouseEventArgs e)
         {
+            if (e.Button == MouseButtons.Right)
+            {
+                lastBallPosition = new Point(e.X, e.Y);
+                ClampBallPosition();
+                this.Invalidate();
+                return;
+            }
+
             Rectangle hitArea = new Rectangle(
                 lastBallPosition.X - BallHitAreaRadius,
                 lastBallPosition.Y - BallHitAreaRadius,
@@ -167,6 +273,8 @@ namespace _8BallPool
 
         private void FormMain_MouseMove(object sender, MouseEventArgs e)
         {
+            if (isClickThrough) return;
+
             Rectangle hitArea = new Rectangle(
                 lastBallPosition.X - BallHitAreaRadius,
                 lastBallPosition.Y - BallHitAreaRadius,
@@ -177,31 +285,22 @@ namespace _8BallPool
             {
                 Cursor.Current = Cursors.Hand;
                 if (isDragging)
+                {
                     lastBallPosition = new Point(e.X, e.Y);
+                    this.Invalidate();
+                }
             }
             else
             {
                 Cursor.Current = Cursors.Default;
             }
-
-            this.Invalidate();
         }
 
         private void FormMain_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Space)
+            if (e.KeyCode == Keys.Space || e.KeyCode == Keys.F1)
             {
-                isTransparent = !isTransparent;
-                if (isTransparent)
-                {
-                    this.TransparencyKey = Color.Empty;
-                    this.Opacity = 0.7D;
-                }
-                else
-                {
-                    this.TransparencyKey = this.BackColor;
-                    this.Opacity = 1.0D;
-                }
+                SetClickThrough(!isClickThrough);
             }
         }
 

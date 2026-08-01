@@ -1,4 +1,4 @@
-﻿namespace _8BallPool
+namespace _8BallPool
 {
     partial class FormMain
     {
@@ -40,7 +40,7 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MaximizeBox = false;
             this.Name = "FormMain";
-            this.Opacity = 0.5D;
+            this.Opacity = 0.65D;
             this.Text = "8 Ball Pool Guidelines";
             this.TopMost = true;
             this.Paint += new System.Windows.Forms.PaintEventHandler(this.FormMain_Paint);
