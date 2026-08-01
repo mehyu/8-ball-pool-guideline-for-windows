@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -12,11 +13,19 @@ namespace _8BallPool
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int WS_EX_LAYERED = 0x00080000;
 
+        private const int WM_NCLBUTTONDOWN = 0xA1;
+        private const int HT_CAPTION = 0x2;
+
         private const int VK_RBUTTON = 0x02;
+        private const int VK_MBUTTON = 0x04;
+        private const int VK_SHIFT = 0x10;
+        private const int VK_CONTROL = 0x11;
         private const int VK_SPACE = 0x20;
         private const int VK_F1 = 0x70;
         private const int VK_UP = 0x26;
         private const int VK_DOWN = 0x28;
+        private const int VK_LEFT = 0x25;
+        private const int VK_RIGHT = 0x27;
         private const int VK_T = 0x54;
         private const int VK_B = 0x42;
 
@@ -28,6 +37,12 @@ namespace _8BallPool
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
+
+        [DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [DllImport("user32.dll")]
+        private static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
         private const int ReferenceBallSize = 25;
         private const int BallCenterDotSize = 2;
@@ -41,7 +56,7 @@ namespace _8BallPool
         private Point lastBallPosition;
         private bool isDragging;
         private bool isClickThrough;
-        private bool isBankShotEnabled;
+        private int cushionMode = 1; // 0=Off, 1=1-Cushion, 2=2-Cushion, 3=3-Cushion
 
         private static readonly Color[] ThemeColors = new Color[]
         {
@@ -70,10 +85,13 @@ namespace _8BallPool
         private bool wasF1Down;
         private bool wasUpDown;
         private bool wasDownDown;
+        private bool wasLeftDown;
+        private bool wasRightKey;
         private bool wasTDown;
         private bool wasBDown;
 
         private Timer updateTimer;
+        private string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "guideline_config.txt");
 
         public FormMain()
         {
@@ -89,9 +107,10 @@ namespace _8BallPool
             Pocket.Initialize();
             lastBallPosition = new Point(this.Width / 2, this.Height / 2);
             isDragging = false;
-            isBankShotEnabled = false;
 
-            this.Opacity = 0.65D; // 15% higher opacity than default 0.50D
+            this.Opacity = 0.65D; // Default opacity
+
+            LoadConfig();
 
             updateTimer = new Timer();
             updateTimer.Interval = 16; // ~60 FPS update loop
@@ -102,7 +121,81 @@ namespace _8BallPool
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            SetClickThrough(true); // Enable click-through by default so user mouse clicks pass straight to game
+            SetClickThrough(true); // Enable click-through overlay by default
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            SaveConfig();
+            base.OnFormClosing(e);
+        }
+
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            SaveConfig();
+        }
+
+        protected override void OnLocationChanged(EventArgs e)
+        {
+            base.OnLocationChanged(e);
+            SaveConfig();
+        }
+
+        private void SaveConfig()
+        {
+            try
+            {
+                string[] lines = new string[]
+                {
+                    "X=" + this.Location.X,
+                    "Y=" + this.Location.Y,
+                    "Width=" + this.Width,
+                    "Height=" + this.Height,
+                    "Opacity=" + this.Opacity.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                    "Theme=" + currentThemeIndex,
+                    "CushionMode=" + cushionMode
+                };
+                File.WriteAllLines(configPath, lines);
+            }
+            catch { }
+        }
+
+        private void LoadConfig()
+        {
+            try
+            {
+                if (!File.Exists(configPath)) return;
+                string[] lines = File.ReadAllLines(configPath);
+                int posX = this.Left, posY = this.Top, w = this.Width, h = this.Height;
+                bool hasPos = false;
+
+                foreach (string line in lines)
+                {
+                    string[] parts = line.Split('=');
+                    if (parts.Length != 2) continue;
+                    string key = parts[0].Trim();
+                    string val = parts[1].Trim();
+                    int intVal;
+                    double dblVal;
+
+                    if (key == "X" && int.TryParse(val, out intVal)) { posX = intVal; hasPos = true; }
+                    else if (key == "Y" && int.TryParse(val, out intVal)) { posY = intVal; hasPos = true; }
+                    else if (key == "Width" && int.TryParse(val, out intVal)) { w = Math.Max(200, intVal); }
+                    else if (key == "Height" && int.TryParse(val, out intVal)) { h = Math.Max(150, intVal); }
+                    else if (key == "Opacity" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out dblVal)) { this.Opacity = Math.Max(0.10D, Math.Min(1.0D, dblVal)); }
+                    else if (key == "Theme" && int.TryParse(val, out intVal)) { currentThemeIndex = Math.Max(0, Math.Min(ThemeColors.Length - 1, intVal)); }
+                    else if (key == "CushionMode" && int.TryParse(val, out intVal)) { cushionMode = Math.Max(0, Math.Min(3, intVal)); }
+                }
+
+                this.Size = new Size(w, h);
+                if (hasPos)
+                {
+                    this.StartPosition = FormStartPosition.Manual;
+                    this.Location = new Point(posX, posY);
+                }
+            }
+            catch { }
         }
 
         private void SetClickThrough(bool enable)
@@ -123,9 +216,15 @@ namespace _8BallPool
 
         private void UpdateTimer_Tick(object sender, EventArgs e)
         {
-            // Right-Click hold or click: continuously update ball position while right mouse button is held
+            // Middle Mouse Wheel Click/Hold OR Ctrl+Right-Click to move/drag ball without triggering in-game right clicks
+            bool isMiddleDown = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+            bool isCtrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+            bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
             bool isRightDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
-            if (isRightDown)
+
+            bool isMoveTriggered = isMiddleDown || ((isCtrlDown || isShiftDown) && isRightDown);
+
+            if (isMoveTriggered)
             {
                 Point cursorPos = Cursor.Position;
                 Point clientPos = this.PointToClient(cursorPos);
@@ -139,7 +238,6 @@ namespace _8BallPool
                     }
                 }
             }
-            wasRightDown = isRightDown;
 
             // Space / F1 to toggle Click-Through Mode
             bool isSpaceDown = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
@@ -151,37 +249,62 @@ namespace _8BallPool
             wasSpaceDown = isSpaceDown;
             wasF1Down = isF1Down;
 
-            // Up / Down arrow keys for live opacity control
+            // Up / Down arrow keys for live opacity control (or Ctrl+Arrow keys for window resizing)
             bool isUpDown = (GetAsyncKeyState(VK_UP) & 0x8000) != 0;
-            if (isUpDown && !wasUpDown)
-            {
-                if (this.Opacity < 1.0D)
-                    this.Opacity = Math.Min(1.0D, Math.Round(this.Opacity + 0.05D, 2));
-            }
-            wasUpDown = isUpDown;
-
             bool isDownDown = (GetAsyncKeyState(VK_DOWN) & 0x8000) != 0;
-            if (isDownDown && !wasDownDown)
+            bool isLeftDown = (GetAsyncKeyState(VK_LEFT) & 0x8000) != 0;
+            bool isRightKey = (GetAsyncKeyState(VK_RIGHT) & 0x8000) != 0;
+
+            if (isCtrlDown)
             {
-                if (this.Opacity > 0.10D)
-                    this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2));
+                // Resize window width/height with Ctrl + Arrow keys
+                if (isRightKey && !wasRightKey) { this.Width += 10; SaveConfig(); }
+                if (isLeftDown && !wasLeftDown) { this.Width = Math.Max(200, this.Width - 10); SaveConfig(); }
+                if (isUpDown && !wasUpDown) { this.Height = Math.Max(150, this.Height - 10); SaveConfig(); }
+                if (isDownDown && !wasDownDown) { this.Height += 10; SaveConfig(); }
             }
+            else
+            {
+                // Opacity control
+                if (isUpDown && !wasUpDown)
+                {
+                    if (this.Opacity < 1.0D)
+                    {
+                        this.Opacity = Math.Min(1.0D, Math.Round(this.Opacity + 0.05D, 2));
+                        SaveConfig();
+                    }
+                }
+                if (isDownDown && !wasDownDown)
+                {
+                    if (this.Opacity > 0.10D)
+                    {
+                        this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2));
+                        SaveConfig();
+                    }
+                }
+            }
+
+            wasUpDown = isUpDown;
             wasDownDown = isDownDown;
+            wasLeftDown = isLeftDown;
+            wasRightKey = isRightKey;
 
             // T Key: Cycle Color Themes
             bool isTDown = (GetAsyncKeyState(VK_T) & 0x8000) != 0;
             if (isTDown && !wasTDown)
             {
                 currentThemeIndex = (currentThemeIndex + 1) % ThemeColors.Length;
+                SaveConfig();
                 this.Invalidate();
             }
             wasTDown = isTDown;
 
-            // B Key: Toggle Bank Shot Reflection Lines
+            // B Key: Cycle Trick Shot / Cushion Bounce Modes (0=Off, 1=1-Cushion, 2=2-Cushion, 3=3-Cushion)
             bool isBDown = (GetAsyncKeyState(VK_B) & 0x8000) != 0;
             if (isBDown && !wasBDown)
             {
-                isBankShotEnabled = !isBankShotEnabled;
+                cushionMode = (cushionMode + 1) % 4;
+                SaveConfig();
                 this.Invalidate();
             }
             wasBDown = isBDown;
@@ -208,11 +331,6 @@ namespace _8BallPool
         {
             Pocket.UpdatePoints(this.Width, this.Height);
             Color themeColor = ThemeColors[currentThemeIndex];
-            string themeName = ThemeNames[currentThemeIndex];
-            string modeText = isClickThrough ? " [Click-Through ON]" : " [Click-Through OFF]";
-            string bankText = isBankShotEnabled ? " [Bank Shots: ON]" : " [Bank Shots: OFF (B)]";
-            this.Text = "8 Ball Pool Guidelines (" + this.Width + "x" + this.Height + ") | Theme: " + themeName + " (T)" + modeText + bankText;
-
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
@@ -222,10 +340,12 @@ namespace _8BallPool
             DrawCorners(g, themeColor);
             DrawPockets(g, themeColor, closestPocket);
             DrawGuideLines(g, themeColor, closestPocket);
-            if (isBankShotEnabled)
+            
+            if (cushionMode > 0)
             {
-                DrawBankShotLines(g, themeColor, closestPocket);
+                DrawTrickShots(g, themeColor, closestPocket);
             }
+
             DrawGhostBall(g, themeColor, closestPocket);
             DrawBall(g, themeColor);
         }
@@ -368,48 +488,120 @@ namespace _8BallPool
             }
         }
 
-        private void DrawBankShotLines(Graphics g, Color themeColor, PocketPosition closestPocket)
+        private void DrawTrickShots(Graphics g, Color themeColor, PocketPosition targetPos)
         {
-            Point targetPt = Pocket.GetPoint(closestPocket);
+            Point ball = lastBallPosition;
+            Point target = Pocket.GetPoint(targetPos);
 
-            // Calculate 1-cushion bank shot bounce point off top cushion
-            int topCushionY = 10;
-            int bottomCushionY = this.Height - 50;
+            int topY = 10;
+            int botY = this.Height - 10;
+            int leftX = 10;
+            int rightX = this.Width - 10;
 
-            // Top cushion bank bounce point
-            double mirroredTargetY = -targetPt.Y + 2 * topCushionY;
-            double dy = mirroredTargetY - lastBallPosition.Y;
-            if (Math.Abs(dy) > 0.001)
+            // 1-Cushion Bounces
+            if (cushionMode >= 1)
             {
-                double bounceX = lastBallPosition.X + (targetPt.X - lastBallPosition.X) * (topCushionY - lastBallPosition.Y) / dy;
-                if (bounceX > 10 && bounceX < this.Width - 10)
+                Draw1CushionBounce(g, ball, target, topY, true, Color.FromArgb(220, 255, 140, 0));
+                Draw1CushionBounce(g, ball, target, botY, true, Color.FromArgb(220, 255, 215, 0));
+            }
+
+            // 2-Cushion Bounces
+            if (cushionMode >= 2)
+            {
+                Draw2CushionBounce(g, ball, target, topY, rightX, Color.FromArgb(220, 50, 205, 50));
+                Draw2CushionBounce(g, ball, target, topY, leftX, Color.FromArgb(220, 0, 255, 255));
+                Draw2CushionBounce(g, ball, target, botY, rightX, Color.FromArgb(220, 238, 130, 238));
+                Draw2CushionBounce(g, ball, target, botY, leftX, Color.FromArgb(220, 255, 105, 180));
+            }
+
+            // 3-Cushion Bounces
+            if (cushionMode >= 3)
+            {
+                Draw3CushionBounce(g, ball, target, topY, rightX, botY, Color.FromArgb(220, 255, 0, 255));
+                Draw3CushionBounce(g, ball, target, topY, leftX, botY, Color.FromArgb(220, 0, 191, 255));
+            }
+        }
+
+        private void Draw1CushionBounce(Graphics g, Point B, Point P, int cushionY, bool isHorizontal, Color col)
+        {
+            if (isHorizontal)
+            {
+                double mirPy = 2.0 * cushionY - P.Y;
+                double dy = mirPy - B.Y;
+                if (Math.Abs(dy) < 0.001) return;
+                double bounceX = B.X + (P.X - B.X) * (cushionY - B.Y) / dy;
+                if (bounceX >= 5 && bounceX <= this.Width - 5)
                 {
-                    Point bouncePt = new Point((int)bounceX, topCushionY);
-                    using (Pen bankPen = new Pen(Color.FromArgb(200, Color.Orange), 2))
+                    Point C1 = new Point((int)bounceX, cushionY);
+                    using (Pen pen = new Pen(col, 2))
                     {
-                        bankPen.DashStyle = DashStyle.Dot;
-                        g.DrawLine(bankPen, lastBallPosition, bouncePt);
-                        g.DrawLine(bankPen, bouncePt, targetPt);
+                        pen.DashStyle = DashStyle.Dash;
+                        g.DrawLine(pen, B, C1);
+                        g.DrawLine(pen, C1, P);
                     }
                 }
             }
+        }
 
-            // Bottom cushion bank bounce point
-            double mirroredBottomY = 2 * bottomCushionY - targetPt.Y;
-            double dyB = mirroredBottomY - lastBallPosition.Y;
-            if (Math.Abs(dyB) > 0.001)
+        private void Draw2CushionBounce(Graphics g, Point B, Point P, int cushion1Y, int cushion2X, Color col)
+        {
+            double mirP1x = 2.0 * cushion2X - P.X;
+            Point P1 = new Point((int)mirP1x, P.Y);
+            double mirP2y = 2.0 * cushion1Y - P1.Y;
+            Point P2 = new Point(P1.X, (int)mirP2y);
+
+            double dy = P2.Y - B.Y;
+            if (Math.Abs(dy) < 0.001) return;
+            double c1X = B.X + (P2.X - B.X) * (cushion1Y - B.Y) / dy;
+            if (c1X < 5 || c1X > this.Width - 5) return;
+            Point C1 = new Point((int)c1X, cushion1Y);
+
+            double dx = P1.X - C1.X;
+            if (Math.Abs(dx) < 0.001) return;
+            double c2Y = C1.Y + (P1.Y - C1.Y) * (cushion2X - C1.X) / dx;
+            if (c2Y < 5 || c2Y > this.Height - 5) return;
+            Point C2 = new Point(cushion2X, (int)c2Y);
+
+            using (Pen pen = new Pen(col, 2))
             {
-                double bounceX = lastBallPosition.X + (targetPt.X - lastBallPosition.X) * (bottomCushionY - lastBallPosition.Y) / dyB;
-                if (bounceX > 10 && bounceX < this.Width - 10)
-                {
-                    Point bouncePt = new Point((int)bounceX, bottomCushionY);
-                    using (Pen bankPen = new Pen(Color.FromArgb(200, Color.Yellow), 2))
-                    {
-                        bankPen.DashStyle = DashStyle.Dot;
-                        g.DrawLine(bankPen, lastBallPosition, bouncePt);
-                        g.DrawLine(bankPen, bouncePt, targetPt);
-                    }
-                }
+                pen.DashStyle = DashStyle.Dash;
+                g.DrawLine(pen, B, C1);
+                g.DrawLine(pen, C1, C2);
+                g.DrawLine(pen, C2, P);
+            }
+        }
+
+        private void Draw3CushionBounce(Graphics g, Point B, Point P, int cushion1Y, int cushion2X, int cushion3Y, Color col)
+        {
+            Point P1 = new Point(P.X, (int)(2.0 * cushion3Y - P.Y));
+            Point P2 = new Point((int)(2.0 * cushion2X - P1.X), P1.Y);
+            Point P3 = new Point(P2.X, (int)(2.0 * cushion1Y - P2.Y));
+
+            double dy1 = P3.Y - B.Y;
+            if (Math.Abs(dy1) < 0.001) return;
+            double c1X = B.X + (P3.X - B.X) * (cushion1Y - B.Y) / dy1;
+            if (c1X < 5 || c1X > this.Width - 5) return;
+            Point C1 = new Point((int)c1X, cushion1Y);
+
+            double dx2 = P2.X - C1.X;
+            if (Math.Abs(dx2) < 0.001) return;
+            double c2Y = C1.Y + (P2.Y - C1.Y) * (cushion2X - C1.X) / dx2;
+            if (c2Y < 5 || c2Y > this.Height - 5) return;
+            Point C2 = new Point(cushion2X, (int)c2Y);
+
+            double dy3 = P1.Y - C2.Y;
+            if (Math.Abs(dy3) < 0.001) return;
+            double c3X = C2.X + (P1.X - C2.X) * (cushion3Y - C2.Y) / dy3;
+            if (c3X < 5 || c3X > this.Width - 5) return;
+            Point C3 = new Point((int)c3X, cushion3Y);
+
+            using (Pen pen = new Pen(col, 2))
+            {
+                pen.DashStyle = DashStyle.Dash;
+                g.DrawLine(pen, B, C1);
+                g.DrawLine(pen, C1, C2);
+                g.DrawLine(pen, C2, C3);
+                g.DrawLine(pen, C3, P);
             }
         }
 
@@ -420,7 +612,7 @@ namespace _8BallPool
 
         private void FormMain_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right)
+            if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Right && (Control.ModifierKeys == Keys.Control || Control.ModifierKeys == Keys.Shift)))
             {
                 lastBallPosition = new Point(e.X, e.Y);
                 ClampBallPosition();
@@ -439,6 +631,12 @@ namespace _8BallPool
                 isDragging = true;
                 lastBallPosition = new Point(e.X, e.Y);
                 this.Invalidate();
+            }
+            else if (!isClickThrough && e.Button == MouseButtons.Left)
+            {
+                // Drag entire frameless overlay window when click-through is OFF
+                ReleaseCapture();
+                SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
             }
         }
 
