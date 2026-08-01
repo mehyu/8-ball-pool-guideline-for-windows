@@ -183,32 +183,40 @@ namespace _8BallPool
             if (nCode >= 0)
             {
                 int msg = wParam.ToInt32();
-                if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP || (msg == WM_MOUSEMOVE && isRightHookDown))
+                if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP || msg == WM_MOUSEMOVE)
                 {
                     MSLLHOOKSTRUCT hookStruct = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
                     Point clientPos = this.PointToClient(new Point(hookStruct.pt.x, hookStruct.pt.y));
 
-                    if (this.ClientRectangle.Contains(clientPos))
+                    if (msg == WM_RBUTTONDOWN)
                     {
-                        if (msg == WM_RBUTTONDOWN)
+                        if (this.ClientRectangle.Contains(clientPos))
                         {
                             isRightHookDown = true;
                             lastBallPosition = clientPos;
                             ClampBallPosition();
                             this.Invalidate();
-                            return (IntPtr)1; // BLOCK RIGHT CLICK FROM GAME!
+                            return (IntPtr)1; // Block right-click press from reaching game
                         }
-                        else if (msg == WM_RBUTTONUP)
+                    }
+                    else if (msg == WM_RBUTTONUP)
+                    {
+                        if (isRightHookDown)
                         {
                             isRightHookDown = false;
-                            return (IntPtr)1; // BLOCK RIGHT CLICK RELEASE FROM GAME!
+                            return (IntPtr)1; // Block right-click release from reaching game
                         }
-                        else if (msg == WM_MOUSEMOVE && isRightHookDown)
+                    }
+                    else if (msg == WM_MOUSEMOVE)
+                    {
+                        if (isRightHookDown && this.ClientRectangle.Contains(clientPos))
                         {
-                            lastBallPosition = clientPos;
-                            ClampBallPosition();
-                            this.Invalidate();
-                            return (IntPtr)1; // BLOCK RIGHT CLICK DRAG FROM GAME!
+                            if (lastBallPosition != clientPos)
+                            {
+                                lastBallPosition = clientPos;
+                                ClampBallPosition();
+                                this.Invalidate();
+                            }
                         }
                     }
                 }
