@@ -20,6 +20,7 @@ namespace _8BallPool
         private const int VK_MBUTTON = 0x04;
         private const int VK_SHIFT = 0x10;
         private const int VK_CONTROL = 0x11;
+        private const int VK_MENU = 0x12; // Alt key
         private const int VK_SPACE = 0x20;
         private const int VK_F1 = 0x70;
         private const int VK_UP = 0x26;
@@ -56,6 +57,7 @@ namespace _8BallPool
         private Point lastBallPosition;
         private bool isDragging;
         private bool isClickThrough;
+        private bool isFirstRun = false;
         private int cushionMode = 1; // 0=Off, 1=1-Cushion, 2=2-Cushion, 3=3-Cushion
 
         private static readonly Color[] ThemeColors = new Color[]
@@ -121,7 +123,8 @@ namespace _8BallPool
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            SetClickThrough(true); // Enable click-through overlay by default
+            // On first run or if setup is needed, start with Click-Through OFF so user sees setup frame
+            SetClickThrough(!isFirstRun);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -165,7 +168,11 @@ namespace _8BallPool
         {
             try
             {
-                if (!File.Exists(configPath)) return;
+                if (!File.Exists(configPath))
+                {
+                    isFirstRun = true;
+                    return;
+                }
                 string[] lines = File.ReadAllLines(configPath);
                 int posX = this.Left, posY = this.Top, w = this.Width, h = this.Height;
                 bool hasPos = false;
@@ -220,6 +227,7 @@ namespace _8BallPool
             bool isMiddleDown = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
             bool isCtrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            bool isAltDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
             bool isRightDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
 
             bool isMoveTriggered = isMiddleDown || ((isCtrlDown || isShiftDown) && isRightDown);
@@ -239,7 +247,7 @@ namespace _8BallPool
                 }
             }
 
-            // Space / F1 to toggle Click-Through Mode
+            // Space / F1 to toggle Click-Through Mode (Lock/Unlock Setup Mode)
             bool isSpaceDown = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
             bool isF1Down = (GetAsyncKeyState(VK_F1) & 0x8000) != 0;
             if ((isSpaceDown && !wasSpaceDown) || (isF1Down && !wasF1Down))
@@ -249,7 +257,7 @@ namespace _8BallPool
             wasSpaceDown = isSpaceDown;
             wasF1Down = isF1Down;
 
-            // Up / Down arrow keys for live opacity control (or Ctrl+Arrow keys for window resizing)
+            // Arrow keys handling
             bool isUpDown = (GetAsyncKeyState(VK_UP) & 0x8000) != 0;
             bool isDownDown = (GetAsyncKeyState(VK_DOWN) & 0x8000) != 0;
             bool isLeftDown = (GetAsyncKeyState(VK_LEFT) & 0x8000) != 0;
@@ -263,9 +271,27 @@ namespace _8BallPool
                 if (isUpDown && !wasUpDown) { this.Height = Math.Max(150, this.Height - 10); SaveConfig(); }
                 if (isDownDown && !wasDownDown) { this.Height += 10; SaveConfig(); }
             }
+            else if (!isClickThrough || isAltDown)
+            {
+                // Move window position with Arrow keys when Click-Through is OFF or Alt is held
+                if (isRightKey && !wasRightKey) { this.Left += 5; SaveConfig(); }
+                if (isLeftDown && !wasLeftDown) { this.Left -= 5; SaveConfig(); }
+                if (isUpDown && !wasUpDown) { this.Top -= 5; SaveConfig(); }
+                if (isDownDown && !wasDownDown) { this.Top += 5; SaveConfig(); }
+
+                // Opacity control with Shift+Up/Down when Click-Through OFF
+                if (isShiftDown && isUpDown && !wasUpDown)
+                {
+                    if (this.Opacity < 1.0D) { this.Opacity = Math.Min(1.0D, Math.Round(this.Opacity + 0.05D, 2)); SaveConfig(); }
+                }
+                if (isShiftDown && isDownDown && !wasDownDown)
+                {
+                    if (this.Opacity > 0.10D) { this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2)); SaveConfig(); }
+                }
+            }
             else
             {
-                // Opacity control
+                // Opacity control with Up/Down when Click-Through is ON
                 if (isUpDown && !wasUpDown)
                 {
                     if (this.Opacity < 1.0D)
@@ -336,6 +362,36 @@ namespace _8BallPool
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
             PocketPosition closestPocket = GetClosestPocket();
+
+            // Draw Setup Mode Border & Instructions if Click-Through is OFF
+            if (!isClickThrough)
+            {
+                using (Pen borderPen = new Pen(Color.Gold, 3))
+                {
+                    g.DrawRectangle(borderPen, 1, 1, this.Width - 2, this.Height - 2);
+                }
+                using (Brush handleBrush = new SolidBrush(Color.Gold))
+                {
+                    g.FillRectangle(handleBrush, 0, 0, 10, 10);
+                    g.FillRectangle(handleBrush, this.Width - 10, 0, 10, 10);
+                    g.FillRectangle(handleBrush, 0, this.Height - 10, 10, 10);
+                    g.FillRectangle(handleBrush, this.Width - 10, this.Height - 10, 10, 10);
+                }
+                using (Brush bannerBg = new SolidBrush(Color.FromArgb(230, 20, 20, 20)))
+                {
+                    g.FillRectangle(bannerBg, 10, 10, Math.Max(100, this.Width - 20), 28);
+                }
+                using (Pen bannerBorder = new Pen(Color.Gold, 1))
+                {
+                    g.DrawRectangle(bannerBorder, 10, 10, Math.Max(100, this.Width - 20), 28);
+                }
+                using (Font font = new Font("Segoe UI", 9, FontStyle.Bold))
+                using (Brush textBrush = new SolidBrush(Color.Gold))
+                {
+                    string txt = "SETUP MODE: Left-Click Drag to Move | Ctrl+Arrows to Resize | SPACE to Lock";
+                    g.DrawString(txt, font, textBrush, 15, 15);
+                }
+            }
 
             DrawCorners(g, themeColor);
             DrawPockets(g, themeColor, closestPocket);
@@ -634,7 +690,7 @@ namespace _8BallPool
             }
             else if (!isClickThrough && e.Button == MouseButtons.Left)
             {
-                // Drag entire frameless overlay window when click-through is OFF
+                // Drag entire frameless overlay window when in Setup Mode (Click-Through OFF)
                 ReleaseCapture();
                 SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
             }
