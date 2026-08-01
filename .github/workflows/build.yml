@@ -34,7 +34,7 @@ jobs:
           Set-Content $file $content
 
       - name: Build solution
-        run: msbuild 8BallPool.sln /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
+        run: msbuild 8BallPool.sln /p:Configuration=Release /p:Platform="x64" /verbosity:minimal
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
