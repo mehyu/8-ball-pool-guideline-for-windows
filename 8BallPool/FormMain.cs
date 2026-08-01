@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -15,6 +16,11 @@ namespace _8BallPool
 
         private const int WM_NCLBUTTONDOWN = 0xA1;
         private const int HT_CAPTION = 0x2;
+
+        private const int WH_MOUSE_LL = 14;
+        private const int WM_MOUSEMOVE = 0x0200;
+        private const int WM_RBUTTONDOWN = 0x0204;
+        private const int WM_RBUTTONUP = 0x0205;
 
         private const int VK_RBUTTON = 0x02;
         private const int VK_MBUTTON = 0x04;
@@ -33,6 +39,28 @@ namespace _8BallPool
         private const int VK_0 = 0x30;
         private const int VK_1 = 0x31;
 
+        private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+        private LowLevelMouseProc _mouseProc;
+        private IntPtr _hookID = IntPtr.Zero;
+        private bool isRightHookDown = false;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int x;
+            public int y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSLLHOOKSTRUCT
+        {
+            public POINT pt;
+            public uint mouseData;
+            public uint flags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
         [DllImport("user32.dll", SetLastError = true)]
         private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
@@ -47,6 +75,19 @@ namespace _8BallPool
 
         [DllImport("user32.dll")]
         private static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
 
         private const int ReferenceBallSize = 25;
         private const int BallCenterDotSize = 2;
@@ -86,7 +127,6 @@ namespace _8BallPool
         };
         private int currentThemeIndex = 0;
 
-        private bool wasRightDown;
         private bool wasSpaceDown;
         private bool wasF1Down;
         private bool wasUpDown;
@@ -120,10 +160,60 @@ namespace _8BallPool
 
             LoadConfig();
 
+            _mouseProc = HookCallback;
+            _hookID = SetHook(_mouseProc);
+
             updateTimer = new Timer();
             updateTimer.Interval = 16; // ~60 FPS update loop
             updateTimer.Tick += UpdateTimer_Tick;
             updateTimer.Start();
+        }
+
+        private IntPtr SetHook(LowLevelMouseProc proc)
+        {
+            using (Process curProcess = Process.GetCurrentProcess())
+            using (ProcessModule curModule = curProcess.MainModule)
+            {
+                return SetWindowsHookEx(WH_MOUSE_LL, proc, GetModuleHandle(curModule.ModuleName), 0);
+            }
+        }
+
+        private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0)
+            {
+                int msg = wParam.ToInt32();
+                if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP || (msg == WM_MOUSEMOVE && isRightHookDown))
+                {
+                    MSLLHOOKSTRUCT hookStruct = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
+                    Point clientPos = this.PointToClient(new Point(hookStruct.pt.x, hookStruct.pt.y));
+
+                    if (this.ClientRectangle.Contains(clientPos))
+                    {
+                        if (msg == WM_RBUTTONDOWN)
+                        {
+                            isRightHookDown = true;
+                            lastBallPosition = clientPos;
+                            ClampBallPosition();
+                            this.Invalidate();
+                            return (IntPtr)1; // BLOCK RIGHT CLICK FROM GAME!
+                        }
+                        else if (msg == WM_RBUTTONUP)
+                        {
+                            isRightHookDown = false;
+                            return (IntPtr)1; // BLOCK RIGHT CLICK RELEASE FROM GAME!
+                        }
+                        else if (msg == WM_MOUSEMOVE && isRightHookDown)
+                        {
+                            lastBallPosition = clientPos;
+                            ClampBallPosition();
+                            this.Invalidate();
+                            return (IntPtr)1; // BLOCK RIGHT CLICK DRAG FROM GAME!
+                        }
+                    }
+                }
+            }
+            return CallNextHookEx(_hookID, nCode, wParam, lParam);
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -135,6 +225,11 @@ namespace _8BallPool
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             SaveConfig();
+            if (_hookID != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_hookID);
+                _hookID = IntPtr.Zero;
+            }
             base.OnFormClosing(e);
         }
 
@@ -230,29 +325,9 @@ namespace _8BallPool
 
         private void UpdateTimer_Tick(object sender, EventArgs e)
         {
-            // Middle Mouse Wheel Click/Hold OR Ctrl+Right-Click to move/drag ball without triggering in-game right clicks
-            bool isMiddleDown = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
             bool isCtrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
             bool isAltDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-            bool isRightDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
-
-            bool isMoveTriggered = isMiddleDown || ((isCtrlDown || isShiftDown) && isRightDown);
-
-            if (isMoveTriggered)
-            {
-                Point cursorPos = Cursor.Position;
-                Point clientPos = this.PointToClient(cursorPos);
-                if (this.ClientRectangle.Contains(clientPos))
-                {
-                    if (lastBallPosition != clientPos)
-                    {
-                        lastBallPosition = clientPos;
-                        ClampBallPosition();
-                        this.Invalidate();
-                    }
-                }
-            }
 
             // Space / F1 to toggle Click-Through Mode (Lock/Unlock Setup Mode)
             bool isSpaceDown = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
@@ -768,7 +843,7 @@ namespace _8BallPool
 
         private void FormMain_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Right && (Control.ModifierKeys == Keys.Control || Control.ModifierKeys == Keys.Shift)))
+            if (e.Button == MouseButtons.Right || e.Button == MouseButtons.Middle)
             {
                 lastBallPosition = new Point(e.X, e.Y);
                 ClampBallPosition();

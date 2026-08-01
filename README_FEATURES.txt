@@ -6,7 +6,18 @@ Welcome to the 8 Ball Pool Guideline Overlay!
 This program is an ultra-fast, smooth 60 FPS, click-through guideline helper for 8 Ball Pool.
 
 --------------------------------------------------------------------------------
-1. TARGET POCKET SELECTION (CHOOSE ANY HOLE FOR TRICK SHOTS)
+1. GUIDELINE BALL POSITIONING (IN-GAME)
+--------------------------------------------------------------------------------
+To move the guideline ball center anywhere on the table:
+
+* RIGHT-CLICK / RIGHT-CLICK HOLD & DRAG (Primary): 
+  Click or hold down your Right Mouse Button anywhere on the table to position or drag the guideline ball.
+
+* MIDDLE MOUSE CLICK (Alternative):
+  You can also click/drag using Middle Mouse Click (Scroll Wheel).
+
+--------------------------------------------------------------------------------
+2. TARGET POCKET SELECTION (CHOOSE ANY HOLE FOR TRICK SHOTS)
 --------------------------------------------------------------------------------
 You can change the target pocket (hole) to ANY pocket you want at any time!
 All guidelines, ghost ball projections, and 1 to 3-cushion trick shots will 
@@ -23,7 +34,7 @@ instantly target your selected hole:
     - 0 : Auto-Detect (Selects the closest pocket automatically)
 
 --------------------------------------------------------------------------------
-2. SETUP MODE & WINDOW ALIGNMENT (FIRST LAUNCH)
+3. SETUP MODE & WINDOW ALIGNMENT (FIRST LAUNCH)
 --------------------------------------------------------------------------------
 When you open the program in Setup Mode, a GOLD OUTLINE FRAME appears:
 
@@ -37,26 +48,16 @@ When you open the program in Setup Mode, a GOLD OUTLINE FRAME appears:
 * PRESS SPACE or F1: Locks the window in place, hides the setup frame, and enables Click-Through Mode so you can play!
 
 --------------------------------------------------------------------------------
-3. GUIDELINE BALL POSITIONING (IN-GAME)
---------------------------------------------------------------------------------
-To move the guideline ball center without interrupting your game or firing your cue stick:
-
-* MIDDLE MOUSE CLICK / HOLD & DRAG (Scroll Wheel): 
-  Click or hold down your mouse scroll wheel anywhere on the table to position or drag the guideline ball.
-  This is 100% safe and will NEVER trigger your right-click cue stick in 8 Ball Pool!
-
-* CTRL + RIGHT-CLICK (Alternative):
-  Hold Ctrl while Right-Clicking to move the ball if you prefer using right clicks.
-
---------------------------------------------------------------------------------
 4. TRICK SHOTS & CUSHION REFLECTIONS (B KEY)
 --------------------------------------------------------------------------------
 Press the 'B' key to cycle through multi-cushion trick shot reflection modes to your selected hole:
 
 * Mode 0: Trick Shots OFF
 * Mode 1: 1-Cushion Rail Reflection Lines (Orange & Gold)
-* Mode 2: 2-Cushion Double Rail Reflections (Lime, Cyan, Violet, Pink)
+* Mode 2: 2-Cushion Double Rail Reflections (Lime & Cyan)
 * Mode 3: 3-Cushion Triple Rail Reflections (Magenta & Sky Blue)
+
+Each trick shot shows numbered rail targets (①, ②, ③) and directional aim arrows (➔)!
 
 --------------------------------------------------------------------------------
 5. LASER COLOR THEMES (T KEY)
@@ -89,9 +90,8 @@ Your window position, size, opacity, color theme, trick shot mode, and selected 
 ================================================================================
 | ACTION                          | CONTROL / HOTKEY                           |
 |---------------------------------|--------------------------------------------|
+| Move Guideline Ball             | Right-Click or Right-Click Hold & Drag     |
 | Select Target Hole              | P key (Cycle) OR Number Keys 1-6 (0=Auto)  |
-| Move Guideline Ball             | Middle Mouse Click (Scroll Wheel)          |
-| Alt Move Guideline Ball         | Ctrl + Right-Click                         |
 | Move Window Position            | Left-Click Drag (Setup Mode) or Arrow Keys |
 | Resize Window Size              | Ctrl + Arrow Keys                          |
 | Lock / Toggle Click-Through     | Space Bar or F1                            |
