@@ -17,6 +17,8 @@ namespace _8BallPool
         private const int VK_F1 = 0x70;
         private const int VK_UP = 0x26;
         private const int VK_DOWN = 0x28;
+        private const int VK_T = 0x54;
+        private const int VK_B = 0x42;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -32,18 +34,44 @@ namespace _8BallPool
         private const int BallHitAreaRadius = 15;
         private const int CornerLineLength = 40;
         private const int CornerLineThickness = 4;
-        private const int PocketIndicatorSize = 3;
-        private const int GuideLineThickness = 3;
+        private const int PocketIndicatorSize = 6;
+        private const int GuideLineThickness = 2;
+        private const int HighlightLineThickness = 4;
 
         private Point lastBallPosition;
         private bool isDragging;
         private bool isClickThrough;
+        private bool isBankShotEnabled;
+
+        private static readonly Color[] ThemeColors = new Color[]
+        {
+            Color.Cyan,
+            Color.Lime,
+            Color.Gold,
+            Color.DeepSkyBlue,
+            Color.Magenta,
+            Color.OrangeRed,
+            Color.White
+        };
+        private static readonly string[] ThemeNames = new string[]
+        {
+            "Laser Cyan",
+            "Neon Green",
+            "Golden Glow",
+            "Deep Sky Blue",
+            "Electric Purple",
+            "Crimson Red",
+            "Classic White"
+        };
+        private int currentThemeIndex = 0;
 
         private bool wasRightDown;
         private bool wasSpaceDown;
         private bool wasF1Down;
         private bool wasUpDown;
         private bool wasDownDown;
+        private bool wasTDown;
+        private bool wasBDown;
 
         private Timer updateTimer;
 
@@ -61,6 +89,7 @@ namespace _8BallPool
             Pocket.Initialize();
             lastBallPosition = new Point(this.Width / 2, this.Height / 2);
             isDragging = false;
+            isBankShotEnabled = false;
 
             this.Opacity = 0.65D; // 15% higher opacity than default 0.50D
 
@@ -94,17 +123,20 @@ namespace _8BallPool
 
         private void UpdateTimer_Tick(object sender, EventArgs e)
         {
-            // Right-Click to snap ball position directly to cursor
+            // Right-Click hold or click: continuously update ball position while right mouse button is held
             bool isRightDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
-            if (isRightDown && !wasRightDown)
+            if (isRightDown)
             {
                 Point cursorPos = Cursor.Position;
                 Point clientPos = this.PointToClient(cursorPos);
                 if (this.ClientRectangle.Contains(clientPos))
                 {
-                    lastBallPosition = clientPos;
-                    ClampBallPosition();
-                    this.Invalidate();
+                    if (lastBallPosition != clientPos)
+                    {
+                        lastBallPosition = clientPos;
+                        ClampBallPosition();
+                        this.Invalidate();
+                    }
                 }
             }
             wasRightDown = isRightDown;
@@ -135,27 +167,72 @@ namespace _8BallPool
                     this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2));
             }
             wasDownDown = isDownDown;
+
+            // T Key: Cycle Color Themes
+            bool isTDown = (GetAsyncKeyState(VK_T) & 0x8000) != 0;
+            if (isTDown && !wasTDown)
+            {
+                currentThemeIndex = (currentThemeIndex + 1) % ThemeColors.Length;
+                this.Invalidate();
+            }
+            wasTDown = isTDown;
+
+            // B Key: Toggle Bank Shot Reflection Lines
+            bool isBDown = (GetAsyncKeyState(VK_B) & 0x8000) != 0;
+            if (isBDown && !wasBDown)
+            {
+                isBankShotEnabled = !isBankShotEnabled;
+                this.Invalidate();
+            }
+            wasBDown = isBDown;
+        }
+
+        private PocketPosition GetClosestPocket()
+        {
+            PocketPosition closest = PocketPosition.TopLeft;
+            double minDistance = double.MaxValue;
+            foreach (PocketPosition pos in Enum.GetValues(typeof(PocketPosition)))
+            {
+                Point p = Pocket.GetPoint(pos);
+                double dist = Math.Sqrt(Math.Pow(p.X - lastBallPosition.X, 2) + Math.Pow(p.Y - lastBallPosition.Y, 2));
+                if (dist < minDistance)
+                {
+                    minDistance = dist;
+                    closest = pos;
+                }
+            }
+            return closest;
         }
 
         private void FormMain_Paint(object sender, PaintEventArgs e)
         {
             Pocket.UpdatePoints(this.Width, this.Height);
-            string modeText = isClickThrough ? " [Click-Through ON - Right Click to Move Ball - Press Space/F1 to toggle]" : " [Click-Through OFF - Press Space/F1 to toggle]";
-            this.Text = "8 Ball Pool Guidelines (" + this.Width + "x" + this.Height + ")" + modeText;
+            Color themeColor = ThemeColors[currentThemeIndex];
+            string themeName = ThemeNames[currentThemeIndex];
+            string modeText = isClickThrough ? " [Click-Through ON]" : " [Click-Through OFF]";
+            string bankText = isBankShotEnabled ? " [Bank Shots: ON]" : " [Bank Shots: OFF (B)]";
+            this.Text = "8 Ball Pool Guidelines (" + this.Width + "x" + this.Height + ") | Theme: " + themeName + " (T)" + modeText + bankText;
 
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            DrawCorners(g);
-            DrawPockets(g);
-            DrawBall(g);
-            DrawGuideLines(g);
+            PocketPosition closestPocket = GetClosestPocket();
+
+            DrawCorners(g, themeColor);
+            DrawPockets(g, themeColor, closestPocket);
+            DrawGuideLines(g, themeColor, closestPocket);
+            if (isBankShotEnabled)
+            {
+                DrawBankShotLines(g, themeColor, closestPocket);
+            }
+            DrawGhostBall(g, themeColor, closestPocket);
+            DrawBall(g, themeColor);
         }
 
-        private void DrawCorners(Graphics g)
+        private void DrawCorners(Graphics g, Color themeColor)
         {
-            using (Pen pen = new Pen(Color.FromArgb(128, 0, 0, 255), CornerLineThickness))
+            using (Pen pen = new Pen(Color.FromArgb(180, themeColor.R, themeColor.G, themeColor.B), CornerLineThickness))
             {
                 DrawCorner(g, pen, PocketPosition.TopLeft, +1, +1);
                 DrawCorner(g, pen, PocketPosition.BottomLeft, +1, -1);
@@ -172,16 +249,29 @@ namespace _8BallPool
             g.DrawLines(pen, new[] { coordHor, reference, coordVer });
         }
 
-        private void DrawPockets(Graphics g)
+        private void DrawPockets(Graphics g, Color themeColor, PocketPosition closestPocket)
         {
-            using (Pen pen = new Pen(Color.FromArgb(128, 255, 0, 0), PocketIndicatorSize))
+            foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
             {
-                foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
+                Point pt = Pocket.GetPoint(position);
+                int offsetX = GetPocketOffsetX(position);
+                int offsetY = GetPocketOffsetY(position);
+
+                bool isTarget = (position == closestPocket);
+                int size = isTarget ? PocketIndicatorSize * 2 : PocketIndicatorSize;
+                Color col = isTarget ? themeColor : Color.FromArgb(160, 255, 0, 0);
+
+                using (Pen pen = new Pen(col, isTarget ? 3 : 2))
                 {
-                    Point pt = Pocket.GetPoint(position);
-                    int offsetX = GetPocketOffsetX(position);
-                    int offsetY = GetPocketOffsetY(position);
-                    g.DrawEllipse(pen, pt.X + offsetX, pt.Y + offsetY, PocketIndicatorSize, PocketIndicatorSize);
+                    g.DrawEllipse(pen, pt.X + offsetX - size / 2, pt.Y + offsetY - size / 2, size, size);
+                }
+
+                if (isTarget)
+                {
+                    using (Brush brush = new SolidBrush(Color.FromArgb(100, themeColor)))
+                    {
+                        g.FillEllipse(brush, pt.X + offsetX - size / 2, pt.Y + offsetY - size / 2, size, size);
+                    }
                 }
             }
         }
@@ -214,7 +304,7 @@ namespace _8BallPool
             }
         }
 
-        private void DrawBall(Graphics g)
+        private void DrawBall(Graphics g, Color themeColor)
         {
             Point pt = lastBallPosition;
             int halfBall = ReferenceBallSize / 2;
@@ -223,21 +313,102 @@ namespace _8BallPool
             Rectangle rectOutside = new Rectangle(pt.X - halfBall, pt.Y - halfBall, ReferenceBallSize, ReferenceBallSize);
             Rectangle rectInside = new Rectangle(pt.X - halfDot, pt.Y - halfDot, BallCenterDotSize, BallCenterDotSize);
 
-            using (Pen penOutside = new Pen(Color.FromArgb(120, 144, 144, 144), 1))
-            using (Pen penInside = new Pen(Color.FromArgb(250, 0, 0, 0), 2))
+            using (Pen penOutside = new Pen(themeColor, 2))
+            using (Pen penInside = new Pen(Color.White, 2))
             {
                 g.DrawEllipse(penOutside, rectOutside);
                 g.DrawEllipse(penInside, rectInside);
             }
         }
 
-        private void DrawGuideLines(Graphics g)
+        private void DrawGuideLines(Graphics g, Color themeColor, PocketPosition closestPocket)
         {
-            using (Pen pen = new Pen(Color.FromArgb(120, 144, 144, 144), GuideLineThickness))
+            foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
             {
-                foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
+                bool isTarget = (position == closestPocket);
+                Color lineCol = isTarget ? themeColor : Color.FromArgb(100, 180, 180, 180);
+                int thickness = isTarget ? HighlightLineThickness : GuideLineThickness;
+
+                using (Pen pen = new Pen(lineCol, thickness))
                 {
+                    if (isTarget)
+                    {
+                        pen.DashStyle = DashStyle.Solid;
+                    }
+                    else
+                    {
+                        pen.DashStyle = DashStyle.Custom;
+                        pen.DashPattern = new float[] { 4, 4 };
+                    }
                     g.DrawLine(pen, lastBallPosition, Pocket.GetPoint(position));
+                }
+            }
+        }
+
+        private void DrawGhostBall(Graphics g, Color themeColor, PocketPosition closestPocket)
+        {
+            Point targetPocketPt = Pocket.GetPoint(closestPocket);
+            double dx = targetPocketPt.X - lastBallPosition.X;
+            double dy = targetPocketPt.Y - lastBallPosition.Y;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+
+            if (dist < 1) return;
+
+            double ghostDist = Math.Min(dist * 0.5, 60.0);
+            int ghostX = (int)(lastBallPosition.X + (dx / dist) * ghostDist);
+            int ghostY = (int)(lastBallPosition.Y + (dy / dist) * ghostDist);
+
+            int halfBall = ReferenceBallSize / 2;
+            Rectangle rectGhost = new Rectangle(ghostX - halfBall, ghostY - halfBall, ReferenceBallSize, ReferenceBallSize);
+
+            using (Pen ghostPen = new Pen(Color.FromArgb(180, themeColor), 2))
+            {
+                ghostPen.DashStyle = DashStyle.Dash;
+                g.DrawEllipse(ghostPen, rectGhost);
+            }
+        }
+
+        private void DrawBankShotLines(Graphics g, Color themeColor, PocketPosition closestPocket)
+        {
+            Point targetPt = Pocket.GetPoint(closestPocket);
+
+            // Calculate 1-cushion bank shot bounce point off top cushion
+            int topCushionY = 10;
+            int bottomCushionY = this.Height - 50;
+
+            // Top cushion bank bounce point
+            double mirroredTargetY = -targetPt.Y + 2 * topCushionY;
+            double dy = mirroredTargetY - lastBallPosition.Y;
+            if (Math.Abs(dy) > 0.001)
+            {
+                double bounceX = lastBallPosition.X + (targetPt.X - lastBallPosition.X) * (topCushionY - lastBallPosition.Y) / dy;
+                if (bounceX > 10 && bounceX < this.Width - 10)
+                {
+                    Point bouncePt = new Point((int)bounceX, topCushionY);
+                    using (Pen bankPen = new Pen(Color.FromArgb(200, Color.Orange), 2))
+                    {
+                        bankPen.DashStyle = DashStyle.Dot;
+                        g.DrawLine(bankPen, lastBallPosition, bouncePt);
+                        g.DrawLine(bankPen, bouncePt, targetPt);
+                    }
+                }
+            }
+
+            // Bottom cushion bank bounce point
+            double mirroredBottomY = 2 * bottomCushionY - targetPt.Y;
+            double dyB = mirroredBottomY - lastBallPosition.Y;
+            if (Math.Abs(dyB) > 0.001)
+            {
+                double bounceX = lastBallPosition.X + (targetPt.X - lastBallPosition.X) * (bottomCushionY - lastBallPosition.Y) / dyB;
+                if (bounceX > 10 && bounceX < this.Width - 10)
+                {
+                    Point bouncePt = new Point((int)bounceX, bottomCushionY);
+                    using (Pen bankPen = new Pen(Color.FromArgb(200, Color.Yellow), 2))
+                    {
+                        bankPen.DashStyle = DashStyle.Dot;
+                        g.DrawLine(bankPen, lastBallPosition, bouncePt);
+                        g.DrawLine(bankPen, bouncePt, targetPt);
+                    }
                 }
             }
         }
