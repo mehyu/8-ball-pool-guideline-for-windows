@@ -36,6 +36,9 @@ namespace _8BallPool
         private const int VK_T = 0x54;
         private const int VK_B = 0x42;
         private const int VK_P = 0x50; // P key to cycle target pocket
+        private const int VK_O = 0x4F; // O key to cycle opacity
+        private const int VK_OEM_4 = 0xDB; // '[' key for lower opacity (-5%)
+        private const int VK_OEM_6 = 0xDD; // ']' key for higher opacity (+5%)
         private const int VK_0 = 0x30;
         private const int VK_1 = 0x31;
 
@@ -136,6 +139,9 @@ namespace _8BallPool
         private bool wasTDown;
         private bool wasBDown;
         private bool wasPDown;
+        private bool wasODown;
+        private bool wasLBracketDown;
+        private bool wasRBracketDown;
         private bool[] wasNumDown = new bool[7];
 
         private Timer updateTimer;
@@ -405,6 +411,44 @@ namespace _8BallPool
             wasLeftDown = isLeftDown;
             wasRightKey = isRightKey;
 
+            // '[' Key: Lower Opacity by 5%
+            bool isLBracketDown = (GetAsyncKeyState(VK_OEM_4) & 0x8000) != 0;
+            if (isLBracketDown && !wasLBracketDown)
+            {
+                if (this.Opacity > 0.10D)
+                {
+                    this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2));
+                    SaveConfig();
+                    this.Invalidate();
+                }
+            }
+            wasLBracketDown = isLBracketDown;
+
+            // ']' Key: Higher Opacity by 5%
+            bool isRBracketDown = (GetAsyncKeyState(VK_OEM_6) & 0x8000) != 0;
+            if (isRBracketDown && !wasRBracketDown)
+            {
+                if (this.Opacity < 1.0D)
+                {
+                    this.Opacity = Math.Min(1.0D, Math.Round(this.Opacity + 0.05D, 2));
+                    SaveConfig();
+                    this.Invalidate();
+                }
+            }
+            wasRBracketDown = isRBracketDown;
+
+            // O Key: Cycle Opacity Presets (40% -> 60% -> 80% -> 100%)
+            bool isODown = (GetAsyncKeyState(VK_O) & 0x8000) != 0;
+            if (isODown && !wasODown)
+            {
+                double op = Math.Round(this.Opacity + 0.20D, 2);
+                if (op > 1.0D) op = 0.40D;
+                this.Opacity = op;
+                SaveConfig();
+                this.Invalidate();
+            }
+            wasODown = isODown;
+
             // T Key: Cycle Color Themes
             bool isTDown = (GetAsyncKeyState(VK_T) & 0x8000) != 0;
             if (isTDown && !wasTDown)
@@ -503,17 +547,45 @@ namespace _8BallPool
                 }
                 using (Brush bannerBg = new SolidBrush(Color.FromArgb(230, 20, 20, 20)))
                 {
-                    g.FillRectangle(bannerBg, 10, 10, Math.Max(100, this.Width - 20), 28);
+                    g.FillRectangle(bannerBg, 10, 10, Math.Max(100, this.Width - 20), 32);
                 }
                 using (Pen bannerBorder = new Pen(Color.Gold, 1))
                 {
-                    g.DrawRectangle(bannerBorder, 10, 10, Math.Max(100, this.Width - 20), 28);
+                    g.DrawRectangle(bannerBorder, 10, 10, Math.Max(100, this.Width - 20), 32);
                 }
                 using (Font font = new Font("Segoe UI", 9, FontStyle.Bold))
                 using (Brush textBrush = new SolidBrush(Color.Gold))
                 {
                     string txt = "SETUP MODE: Left-Click Drag to Move | Ctrl+Arrows to Resize | SPACE to Lock";
-                    g.DrawString(txt, font, textBrush, 15, 15);
+                    g.DrawString(txt, font, textBrush, 15, 17);
+                }
+
+                // Interactive Opacity Buttons UI on Setup Banner
+                int opacityPercent = (int)Math.Round(this.Opacity * 100);
+                int btnY = 14;
+                int btnHeight = 24;
+                
+                Rectangle minusRect = new Rectangle(this.Width - 230, btnY, 60, btnHeight);
+                Rectangle plusRect = new Rectangle(this.Width - 70, btnY, 60, btnHeight);
+
+                using (Brush btnBg = new SolidBrush(Color.FromArgb(200, 50, 50, 50)))
+                using (Pen btnPen = new Pen(Color.Gold, 1))
+                using (Font btnFont = new Font("Segoe UI", 9, FontStyle.Bold))
+                using (Brush btnTextBrush = new SolidBrush(Color.White))
+                {
+                    // Draw [ Lower (-5%) ] button
+                    g.FillRectangle(btnBg, minusRect);
+                    g.DrawRectangle(btnPen, minusRect);
+                    g.DrawString("Lower [", btnFont, btnTextBrush, minusRect.X + 6, minusRect.Y + 3);
+
+                    // Draw Opacity percentage text
+                    string opTxt = opacityPercent + "%";
+                    g.DrawString(opTxt, btnFont, btnTextBrush, minusRect.X + 68, minusRect.Y + 3);
+
+                    // Draw [ Higher (+5%) ] button
+                    g.FillRectangle(btnBg, plusRect);
+                    g.DrawRectangle(btnPen, plusRect);
+                    g.DrawString("Higher ]", btnFont, btnTextBrush, plusRect.X + 5, plusRect.Y + 3);
                 }
             }
 
@@ -873,6 +945,25 @@ namespace _8BallPool
             }
             else if (!isClickThrough && e.Button == MouseButtons.Left)
             {
+                // Check if user clicked [ Lower ] or [ Higher ] Opacity buttons on Setup Banner
+                Rectangle minusRect = new Rectangle(this.Width - 230, 14, 60, 24);
+                Rectangle plusRect = new Rectangle(this.Width - 70, 14, 60, 24);
+
+                if (minusRect.Contains(e.X, e.Y))
+                {
+                    this.Opacity = Math.Max(0.10D, Math.Round(this.Opacity - 0.05D, 2));
+                    SaveConfig();
+                    this.Invalidate();
+                    return;
+                }
+                if (plusRect.Contains(e.X, e.Y))
+                {
+                    this.Opacity = Math.Min(1.0D, Math.Round(this.Opacity + 0.05D, 2));
+                    SaveConfig();
+                    this.Invalidate();
+                    return;
+                }
+
                 ReleaseCapture();
                 SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
             }
