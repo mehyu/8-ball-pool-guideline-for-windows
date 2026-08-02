@@ -590,8 +590,8 @@ namespace _8BallPool
             }
 
             DrawCorners(g, themeColor);
-            DrawPockets(g, themeColor, activeTargetPocket);
-            DrawGuideLines(g, themeColor, activeTargetPocket);
+            DrawPockets(g, themeColor);
+            DrawGuideLines(g, themeColor);
             
             if (cushionMode > 0)
             {
@@ -621,7 +621,7 @@ namespace _8BallPool
             g.DrawLines(pen, new[] { coordHor, reference, coordVer });
         }
 
-        private void DrawPockets(Graphics g, Color themeColor, PocketPosition closestPocket)
+        private void DrawPockets(Graphics g, Color themeColor)
         {
             foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
             {
@@ -629,21 +629,10 @@ namespace _8BallPool
                 int offsetX = GetPocketOffsetX(position);
                 int offsetY = GetPocketOffsetY(position);
 
-                bool isTarget = (position == closestPocket);
-                int size = isTarget ? PocketIndicatorSize * 2 : PocketIndicatorSize;
-                Color col = isTarget ? themeColor : Color.FromArgb(160, 255, 0, 0);
-
-                using (Pen pen = new Pen(col, isTarget ? 3 : 2))
+                int size = PocketIndicatorSize;
+                using (Pen pen = new Pen(themeColor, 2))
                 {
                     g.DrawEllipse(pen, pt.X + offsetX - size / 2, pt.Y + offsetY - size / 2, size, size);
-                }
-
-                if (isTarget)
-                {
-                    using (Brush brush = new SolidBrush(Color.FromArgb(100, themeColor)))
-                    {
-                        g.FillEllipse(brush, pt.X + offsetX - size / 2, pt.Y + offsetY - size / 2, size, size);
-                    }
                 }
             }
         }
@@ -693,25 +682,14 @@ namespace _8BallPool
             }
         }
 
-        private void DrawGuideLines(Graphics g, Color themeColor, PocketPosition closestPocket)
+        private void DrawGuideLines(Graphics g, Color themeColor)
         {
-            foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
+            using (Pen pen = new Pen(themeColor, GuideLineThickness))
             {
-                bool isTarget = (position == closestPocket);
-                Color lineCol = isTarget ? themeColor : Color.FromArgb(100, 180, 180, 180);
-                int thickness = isTarget ? HighlightLineThickness : GuideLineThickness;
-
-                using (Pen pen = new Pen(lineCol, thickness))
+                pen.DashStyle = DashStyle.Custom;
+                pen.DashPattern = new float[] { 4, 4 };
+                foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
                 {
-                    if (isTarget)
-                    {
-                        pen.DashStyle = DashStyle.Solid;
-                    }
-                    else
-                    {
-                        pen.DashStyle = DashStyle.Custom;
-                        pen.DashPattern = new float[] { 4, 4 };
-                    }
                     g.DrawLine(pen, lastBallPosition, Pocket.GetPoint(position));
                 }
             }
@@ -726,17 +704,40 @@ namespace _8BallPool
 
             if (dist < 1) return;
 
+            double ux = dx / dist;
+            double uy = dy / dist;
+
             double ghostDist = Math.Min(dist * 0.5, 60.0);
-            int ghostX = (int)(lastBallPosition.X + (dx / dist) * ghostDist);
-            int ghostY = (int)(lastBallPosition.Y + (dy / dist) * ghostDist);
+            int ghostX = (int)(lastBallPosition.X + ux * ghostDist);
+            int ghostY = (int)(lastBallPosition.Y + uy * ghostDist);
 
             int halfBall = ReferenceBallSize / 2;
             Rectangle rectGhost = new Rectangle(ghostX - halfBall, ghostY - halfBall, ReferenceBallSize, ReferenceBallSize);
 
-            using (Pen ghostPen = new Pen(Color.FromArgb(180, themeColor), 2))
+            // 1. Draw Ghost Cue Ball Ring
+            using (Pen ghostPen = new Pen(Color.FromArgb(200, themeColor), 2))
             {
                 ghostPen.DashStyle = DashStyle.Dash;
                 g.DrawEllipse(ghostPen, rectGhost);
+            }
+
+            // 2. 90-Degree Cue Ball Tangent Deflection Line (Post-collision path)
+            double tangentLength = 45.0;
+            Point tangentP1 = new Point((int)(ghostX - uy * tangentLength), (int)(ghostY + ux * tangentLength));
+            Point tangentP2 = new Point((int)(ghostX + uy * tangentLength), (int)(ghostY - ux * tangentLength));
+
+            using (Pen tangentPen = new Pen(Color.FromArgb(220, Color.DeepPink), 2))
+            {
+                tangentPen.DashStyle = DashStyle.Dot;
+                g.DrawLine(tangentPen, new Point(ghostX, ghostY), tangentP1);
+                g.DrawLine(tangentPen, new Point(ghostX, ghostY), tangentP2);
+            }
+
+            // 3. Tangent Deflection Target Label
+            using (Brush fontBrush = new SolidBrush(Color.DeepPink))
+            using (Font font = new Font("Segoe UI", 7, FontStyle.Bold))
+            {
+                g.DrawString("90° Tangent", font, fontBrush, ghostX + 10, ghostY - 12);
             }
         }
 
@@ -798,10 +799,11 @@ namespace _8BallPool
             Point ball = lastBallPosition;
             Point target = Pocket.GetPoint(targetPos);
 
-            int topY = 10;
-            int botY = this.Height - 10;
-            int leftX = 10;
-            int rightX = this.Width - 10;
+            int ballRadius = ReferenceBallSize / 2; // 12px physical collision offset
+            int topY = 12;
+            int botY = this.Height - 12;
+            int leftX = 12;
+            int rightX = this.Width - 12;
 
             // Mode 1: 1-Cushion Trick Shots
             if (cushionMode == 1)
