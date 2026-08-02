@@ -714,30 +714,10 @@ namespace _8BallPool
             int halfBall = ReferenceBallSize / 2;
             Rectangle rectGhost = new Rectangle(ghostX - halfBall, ghostY - halfBall, ReferenceBallSize, ReferenceBallSize);
 
-            // 1. Draw Ghost Cue Ball Ring
-            using (Pen ghostPen = new Pen(Color.FromArgb(200, themeColor), 2))
+            using (Pen ghostPen = new Pen(Color.FromArgb(180, themeColor), 2))
             {
                 ghostPen.DashStyle = DashStyle.Dash;
                 g.DrawEllipse(ghostPen, rectGhost);
-            }
-
-            // 2. 90-Degree Cue Ball Tangent Deflection Line (Post-collision path)
-            double tangentLength = 45.0;
-            Point tangentP1 = new Point((int)(ghostX - uy * tangentLength), (int)(ghostY + ux * tangentLength));
-            Point tangentP2 = new Point((int)(ghostX + uy * tangentLength), (int)(ghostY - ux * tangentLength));
-
-            using (Pen tangentPen = new Pen(Color.FromArgb(220, Color.DeepPink), 2))
-            {
-                tangentPen.DashStyle = DashStyle.Dot;
-                g.DrawLine(tangentPen, new Point(ghostX, ghostY), tangentP1);
-                g.DrawLine(tangentPen, new Point(ghostX, ghostY), tangentP2);
-            }
-
-            // 3. Tangent Deflection Target Label
-            using (Brush fontBrush = new SolidBrush(Color.DeepPink))
-            using (Font font = new Font("Segoe UI", 7, FontStyle.Bold))
-            {
-                g.DrawString("90° Tangent", font, fontBrush, ghostX + 10, ghostY - 12);
             }
         }
 
