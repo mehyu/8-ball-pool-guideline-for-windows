@@ -104,15 +104,15 @@ namespace _8BallPool
 
         private int referenceBallSize = 23;
         private const int BallCenterDotSize = 2;
-        private const int BallHitAreaRadius = 15;
         private const int CornerLineLength = 40;
         private const int CornerLineThickness = 4;
         private const int PocketIndicatorSize = 6;
         private const int GuideLineThickness = 2;
         private const int HighlightLineThickness = 4;
 
-        private Point lastBallPosition;
-        private bool isDragging;
+        private Point cueBallPosition;
+        private Point targetBallPosition;
+        private int activeDragBall = 0; // 0=None, 1=CueBall, 2=TargetBall
         private bool isClickThrough;
         private bool isFirstRun = false;
         private int cushionMode = 1; // 0=Off, 1=1-Cushion, 2=2-Cushion, 3=3-Cushion
@@ -205,8 +205,8 @@ namespace _8BallPool
             this.UpdateStyles();
 
             Pocket.Initialize();
-            lastBallPosition = new Point(this.Width / 2, this.Height / 2);
-            isDragging = false;
+            cueBallPosition = new Point(this.Width / 3, this.Height / 2);
+            targetBallPosition = new Point(this.Width * 2 / 3, this.Height / 2);
 
             this.Opacity = 0.65D; // Default opacity
 
@@ -251,7 +251,21 @@ namespace _8BallPool
                         if (this.ClientRectangle.Contains(clientPos))
                         {
                             isRightHookDown = true;
-                            lastBallPosition = clientPos;
+                            bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+                            double distCue = Math.Sqrt(Math.Pow(clientPos.X - cueBallPosition.X, 2) + Math.Pow(clientPos.Y - cueBallPosition.Y, 2));
+                            double distTarget = Math.Sqrt(Math.Pow(clientPos.X - targetBallPosition.X, 2) + Math.Pow(clientPos.Y - targetBallPosition.Y, 2));
+
+                            if (isShiftDown || (distCue < distTarget && distCue < 40))
+                            {
+                                activeDragBall = 1;
+                                cueBallPosition = clientPos;
+                            }
+                            else
+                            {
+                                activeDragBall = 2;
+                                targetBallPosition = clientPos;
+                            }
+
                             ClampBallPosition();
                             this.Invalidate();
                             return (IntPtr)1; // Block right-click press from reaching game
@@ -262,6 +276,7 @@ namespace _8BallPool
                         if (isRightHookDown)
                         {
                             isRightHookDown = false;
+                            activeDragBall = 0;
                             return (IntPtr)1; // Block right-click release from reaching game
                         }
                     }
@@ -269,12 +284,16 @@ namespace _8BallPool
                     {
                         if (isRightHookDown && this.ClientRectangle.Contains(clientPos))
                         {
-                            if (lastBallPosition != clientPos)
+                            if (activeDragBall == 1)
                             {
-                                lastBallPosition = clientPos;
-                                ClampBallPosition();
-                                this.Invalidate();
+                                cueBallPosition = clientPos;
                             }
+                            else
+                            {
+                                targetBallPosition = clientPos;
+                            }
+                            ClampBallPosition();
+                            this.Invalidate();
                         }
                     }
                 }
@@ -325,7 +344,11 @@ namespace _8BallPool
                     "Theme=" + currentThemeIndex,
                     "CushionMode=" + cushionMode,
                     "TargetPocket=" + targetPocketSelection,
-                    "BallSize=" + referenceBallSize
+                    "BallSize=" + referenceBallSize,
+                    "CueBallX=" + cueBallPosition.X,
+                    "CueBallY=" + cueBallPosition.Y,
+                    "TargetBallX=" + targetBallPosition.X,
+                    "TargetBallY=" + targetBallPosition.Y
                 };
                 File.WriteAllLines(configPath, lines);
             }
@@ -363,6 +386,10 @@ namespace _8BallPool
                     else if (key == "CushionMode" && int.TryParse(val, out intVal)) { cushionMode = Math.Max(0, Math.Min(3, intVal)); }
                     else if (key == "TargetPocket" && int.TryParse(val, out intVal)) { targetPocketSelection = Math.Max(-1, Math.Min(5, intVal)); }
                     else if ((key == "BallSize" || key == "ReferenceBallSize") && int.TryParse(val, out intVal)) { referenceBallSize = Math.Max(8, Math.Min(60, intVal)); }
+                    else if (key == "CueBallX" && int.TryParse(val, out intVal)) { cueBallPosition.X = intVal; }
+                    else if (key == "CueBallY" && int.TryParse(val, out intVal)) { cueBallPosition.Y = intVal; }
+                    else if (key == "TargetBallX" && int.TryParse(val, out intVal)) { targetBallPosition.X = intVal; }
+                    else if (key == "TargetBallY" && int.TryParse(val, out intVal)) { targetBallPosition.Y = intVal; }
                 }
 
                 this.Size = new Size(w, h);
@@ -602,7 +629,7 @@ namespace _8BallPool
             foreach (PocketPosition pos in Enum.GetValues(typeof(PocketPosition)))
             {
                 Point p = Pocket.GetPoint(pos);
-                double dist = Math.Sqrt(Math.Pow(p.X - lastBallPosition.X, 2) + Math.Pow(p.Y - lastBallPosition.Y, 2));
+                double dist = Math.Sqrt(Math.Pow(p.X - targetBallPosition.X, 2) + Math.Pow(p.Y - targetBallPosition.Y, 2));
                 if (dist < minDistance)
                 {
                     minDistance = dist;
@@ -691,15 +718,14 @@ namespace _8BallPool
 
             DrawCorners(g, themeColor);
             DrawPockets(g, themeColor);
-            DrawGuideLines(g, themeColor);
+            DrawGuideLinesAndGhost(g, themeColor, activeTargetPocket);
             
             if (cushionMode > 0)
             {
                 DrawTrickShots(g, themeColor, activeTargetPocket);
             }
 
-            DrawGhostBall(g, themeColor, activeTargetPocket);
-            DrawBall(g, themeColor);
+            DrawBalls(g, themeColor);
 
             // Draw HUD overlay notification if active
             if (DateTime.Now < hudMessageTime && !string.IsNullOrEmpty(hudMessageText))
@@ -786,41 +812,46 @@ namespace _8BallPool
             }
         }
 
-        private void DrawBall(Graphics g, Color themeColor)
+        private void DrawBalls(Graphics g, Color themeColor)
         {
-            Point pt = lastBallPosition;
             int halfBall = referenceBallSize / 2;
             int halfDot = BallCenterDotSize / 2;
 
-            Rectangle rectOutside = new Rectangle(pt.X - halfBall, pt.Y - halfBall, referenceBallSize, referenceBallSize);
-            Rectangle rectInside = new Rectangle(pt.X - halfDot, pt.Y - halfDot, BallCenterDotSize, BallCenterDotSize);
+            // 1. Draw Cue Ball (White Ball)
+            Rectangle rectCue = new Rectangle(cueBallPosition.X - halfBall, cueBallPosition.Y - halfBall, referenceBallSize, referenceBallSize);
+            Rectangle rectCueCenter = new Rectangle(cueBallPosition.X - halfDot, cueBallPosition.Y - halfDot, BallCenterDotSize, BallCenterDotSize);
 
-            using (Pen penOutside = new Pen(themeColor, 2))
-            using (Pen penInside = new Pen(Color.White, 2))
+            using (Pen cuePen = new Pen(Color.White, 2.5f))
+            using (Brush cueFill = new SolidBrush(Color.White))
             {
-                g.DrawEllipse(penOutside, rectOutside);
-                g.DrawEllipse(penInside, rectInside);
+                g.DrawEllipse(cuePen, rectCue);
+                g.FillEllipse(cueFill, rectCueCenter);
+            }
+
+            // Draw 'C' label above Cue Ball
+            using (Font font = new Font("Segoe UI", 7, FontStyle.Bold))
+            using (Brush textBrush = new SolidBrush(Color.White))
+            {
+                g.DrawString("CUE", font, textBrush, cueBallPosition.X - 10, cueBallPosition.Y - halfBall - 13);
+            }
+
+            // 2. Draw Target Ball (Object Ball - Theme Color)
+            Rectangle rectTarget = new Rectangle(targetBallPosition.X - halfBall, targetBallPosition.Y - halfBall, referenceBallSize, referenceBallSize);
+            Rectangle rectTargetCenter = new Rectangle(targetBallPosition.X - halfDot, targetBallPosition.Y - halfDot, BallCenterDotSize, BallCenterDotSize);
+
+            using (Pen targetPen = new Pen(themeColor, 2.5f))
+            using (Pen insidePen = new Pen(Color.White, 2))
+            {
+                g.DrawEllipse(targetPen, rectTarget);
+                g.DrawEllipse(insidePen, rectTargetCenter);
             }
         }
 
-        private void DrawGuideLines(Graphics g, Color themeColor)
+        private void DrawGuideLinesAndGhost(Graphics g, Color themeColor, PocketPosition targetPocket)
         {
-            using (Pen pen = new Pen(themeColor, GuideLineThickness))
-            {
-                pen.DashStyle = DashStyle.Custom;
-                pen.DashPattern = new float[] { 4, 4 };
-                foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
-                {
-                    g.DrawLine(pen, lastBallPosition, Pocket.GetPoint(position));
-                }
-            }
-        }
-
-        private void DrawGhostBall(Graphics g, Color themeColor, PocketPosition closestPocket)
-        {
-            Point targetPocketPt = Pocket.GetPoint(closestPocket);
-            double dx = targetPocketPt.X - lastBallPosition.X;
-            double dy = targetPocketPt.Y - lastBallPosition.Y;
+            Point targetPocketPt = Pocket.GetPoint(targetPocket);
+            double dx = targetPocketPt.X - targetBallPosition.X;
+            double dy = targetPocketPt.Y - targetBallPosition.Y;
             double dist = Math.Sqrt(dx * dx + dy * dy);
 
             if (dist < 1) return;
@@ -828,17 +859,48 @@ namespace _8BallPool
             double ux = dx / dist;
             double uy = dy / dist;
 
-            double ghostDist = Math.Min(dist * 0.5, 60.0);
-            int ghostX = (int)(lastBallPosition.X + ux * ghostDist);
-            int ghostY = (int)(lastBallPosition.Y + uy * ghostDist);
+            // Ghost ball collision center where Cue Ball collides with Target Ball
+            Point ghostPos = new Point(
+                (int)(targetBallPosition.X - ux * referenceBallSize),
+                (int)(targetBallPosition.Y - uy * referenceBallSize));
 
+            // 1. FIRST DIRECTION (Aim Line: Cue Ball -> Ghost Ball) -> RED
+            DrawDirectionalLine(g, cueBallPosition, ghostPos, Color.Red, 3);
+
+            // 2. SECOND DIRECTION (Target Ball Path -> Pocket) -> GREEN
+            using (Pen targetPathPen = new Pen(Color.Lime, GuideLineThickness))
+            {
+                targetPathPen.DashStyle = DashStyle.Custom;
+                targetPathPen.DashPattern = new float[] { 4, 4 };
+                g.DrawLine(targetPathPen, targetBallPosition, targetPocketPt);
+            }
+
+            // 3. Ghost Ball Circle
             int halfBall = referenceBallSize / 2;
-            Rectangle rectGhost = new Rectangle(ghostX - halfBall, ghostY - halfBall, referenceBallSize, referenceBallSize);
-
-            using (Pen ghostPen = new Pen(Color.FromArgb(180, themeColor), 2))
+            Rectangle rectGhost = new Rectangle(ghostPos.X - halfBall, ghostPos.Y - halfBall, referenceBallSize, referenceBallSize);
+            using (Pen ghostPen = new Pen(Color.FromArgb(200, themeColor), 2))
             {
                 ghostPen.DashStyle = DashStyle.Dash;
                 g.DrawEllipse(ghostPen, rectGhost);
+            }
+
+            // 4. Cue Ball Tangent Deflection Line (post-collision) -> BLUE
+            double cdx = ghostPos.X - cueBallPosition.X;
+            double cdy = ghostPos.Y - cueBallPosition.Y;
+            double cdist = Math.Sqrt(cdx * cdx + cdy * cdy);
+            if (cdist > 1)
+            {
+                double tx = -uy;
+                double ty = ux;
+                double dot = (cueBallPosition.X - ghostPos.X) * tx + (cueBallPosition.Y - ghostPos.Y) * ty;
+                if (dot < 0) { tx = -tx; ty = -ty; }
+
+                Point tangentEnd = new Point((int)(ghostPos.X + tx * 35), (int)(ghostPos.Y + ty * 35));
+                using (Pen tanPen = new Pen(Color.Cyan, 2))
+                {
+                    tanPen.DashStyle = DashStyle.Dot;
+                    g.DrawLine(tanPen, ghostPos, tangentEnd);
+                }
             }
         }
 
@@ -897,7 +959,6 @@ namespace _8BallPool
 
         private void DrawTrickShots(Graphics g, Color themeColor, PocketPosition targetPos)
         {
-            Point ball = lastBallPosition;
             Point target = Pocket.GetPoint(targetPos);
 
             int ballRadius = referenceBallSize / 2;
@@ -906,59 +967,71 @@ namespace _8BallPool
             int leftX = ballRadius;
             int rightX = this.Width - ballRadius;
 
-            // Mode 1: 1-Cushion Trick Shots
+            // Bank Shots (Target Ball bounces off cushion to target pocket)
             if (cushionMode == 1)
             {
-                Draw1CushionBounce(g, ball, target, topY, true, Color.Gold);
-                Draw1CushionBounce(g, ball, target, botY, true, Color.Orange);
+                Draw1CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, true, Color.Gold);
+                Draw1CushionBounce(g, cueBallPosition, targetBallPosition, target, botY, true, Color.Orange);
             }
-            // Mode 2: 2-Cushion Trick Shots
             else if (cushionMode == 2)
             {
-                Draw2CushionBounce(g, ball, target, topY, rightX, Color.Lime);
-                Draw2CushionBounce(g, ball, target, topY, leftX, Color.Cyan);
+                Draw2CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, rightX, Color.Lime);
+                Draw2CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, leftX, Color.Cyan);
             }
-            // Mode 3: 3-Cushion Trick Shots
             else if (cushionMode == 3)
             {
-                Draw3CushionBounce(g, ball, target, topY, rightX, botY, Color.Magenta);
-                Draw3CushionBounce(g, ball, target, topY, leftX, botY, Color.DeepSkyBlue);
+                Draw3CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, rightX, botY, Color.Magenta);
+                Draw3CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, leftX, botY, Color.DeepSkyBlue);
             }
         }
 
-        private void Draw1CushionBounce(Graphics g, Point B, Point P, int cushionY, bool isHorizontal, Color col)
+        private void Draw1CushionBounce(Graphics g, Point C, Point T, Point P, int cushionY, bool isHorizontal, Color col)
         {
             if (isHorizontal)
             {
                 double mirPy = 2.0 * cushionY - P.Y;
-                double dy = mirPy - B.Y;
+                double dy = mirPy - T.Y;
                 if (Math.Abs(dy) < 0.001) return;
-                double bounceX = B.X + (P.X - B.X) * (cushionY - B.Y) / dy;
+                double bounceX = T.X + (P.X - T.X) * (cushionY - T.Y) / dy;
                 if (bounceX >= 5 && bounceX <= this.Width - 5)
                 {
                     Point C1 = new Point((int)bounceX, cushionY);
                     
-                    // Path 1: Cue Ball -> Rail 1
-                    DrawDirectionalLine(g, B, C1, Color.Yellow, 3);
-                    // Path 2: Rail 1 -> Target Hole
-                    DrawDirectionalLine(g, C1, P, col, 3);
+                    // Ghost Ball G at Target Ball along vector to Rail Bounce C1
+                    double bdx = C1.X - T.X;
+                    double bdy = C1.Y - T.Y;
+                    double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
+                    if (bdist > 1)
+                    {
+                        Point ghostG = new Point(
+                            (int)(T.X - (bdx / bdist) * referenceBallSize),
+                            (int)(T.Y - (bdy / bdist) * referenceBallSize));
+                        
+                        // 1. FIRST AIM DIRECTION (Cue Ball -> Ghost Ball) -> RED
+                        DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                    }
+
+                    // 2. SECOND DIRECTION (Target Ball -> Rail 1) -> GREEN
+                    DrawDirectionalLine(g, T, C1, Color.Lime, 3);
+                    // 3. THIRD DIRECTION (Rail 1 -> Target Hole) -> BLUE
+                    DrawDirectionalLine(g, C1, P, Color.Cyan, 3);
 
                     // Bounce Marker Target
-                    DrawBounceTarget(g, C1, "1", col);
+                    DrawBounceTarget(g, C1, "1", Color.Lime);
                 }
             }
         }
 
-        private void Draw2CushionBounce(Graphics g, Point B, Point P, int cushion1Y, int cushion2X, Color col)
+        private void Draw2CushionBounce(Graphics g, Point C, Point T, Point P, int cushion1Y, int cushion2X, Color col)
         {
             double mirP1x = 2.0 * cushion2X - P.X;
             Point P1 = new Point((int)mirP1x, P.Y);
             double mirP2y = 2.0 * cushion1Y - P1.Y;
             Point P2 = new Point(P1.X, (int)mirP2y);
 
-            double dy = P2.Y - B.Y;
+            double dy = P2.Y - T.Y;
             if (Math.Abs(dy) < 0.001) return;
-            double c1X = B.X + (P2.X - B.X) * (cushion1Y - B.Y) / dy;
+            double c1X = T.X + (P2.X - T.X) * (cushion1Y - T.Y) / dy;
             if (c1X < 5 || c1X > this.Width - 5) return;
             Point C1 = new Point((int)c1X, cushion1Y);
 
@@ -968,27 +1041,41 @@ namespace _8BallPool
             if (c2Y < 5 || c2Y > this.Height - 5) return;
             Point C2 = new Point(cushion2X, (int)c2Y);
 
-            // Path 1: Cue Ball -> Rail 1
-            DrawDirectionalLine(g, B, C1, Color.Yellow, 3);
-            // Path 2: Rail 1 -> Rail 2
-            DrawDirectionalLine(g, C1, C2, col, 3);
-            // Path 3: Rail 2 -> Target Hole
-            DrawDirectionalLine(g, C2, P, Color.Cyan, 3);
+            // Ghost Ball G at Target Ball along vector to Rail 1
+            double bdx = C1.X - T.X;
+            double bdy = C1.Y - T.Y;
+            double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
+            if (bdist > 1)
+            {
+                Point ghostG = new Point(
+                    (int)(T.X - (bdx / bdist) * referenceBallSize),
+                    (int)(T.Y - (bdy / bdist) * referenceBallSize));
+
+                // 1. FIRST AIM DIRECTION (Cue Ball -> Ghost Ball) -> RED
+                DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+            }
+
+            // 2. SECOND DIRECTION (Target Ball -> Rail 1) -> GREEN
+            DrawDirectionalLine(g, T, C1, Color.Lime, 3);
+            // 3. THIRD DIRECTION (Rail 1 -> Rail 2) -> BLUE
+            DrawDirectionalLine(g, C1, C2, Color.Cyan, 3);
+            // 4. FOURTH DIRECTION (Rail 2 -> Target Hole) -> YELLOW
+            DrawDirectionalLine(g, C2, P, Color.Gold, 3);
 
             // Rail Bounce Markers
-            DrawBounceTarget(g, C1, "1", col);
-            DrawBounceTarget(g, C2, "2", col);
+            DrawBounceTarget(g, C1, "1", Color.Lime);
+            DrawBounceTarget(g, C2, "2", Color.Cyan);
         }
 
-        private void Draw3CushionBounce(Graphics g, Point B, Point P, int cushion1Y, int cushion2X, int cushion3Y, Color col)
+        private void Draw3CushionBounce(Graphics g, Point C, Point T, Point P, int cushion1Y, int cushion2X, int cushion3Y, Color col)
         {
             Point P1 = new Point(P.X, (int)(2.0 * cushion3Y - P.Y));
             Point P2 = new Point((int)(2.0 * cushion2X - P1.X), P1.Y);
             Point P3 = new Point(P2.X, (int)(2.0 * cushion1Y - P2.Y));
 
-            double dy1 = P3.Y - B.Y;
+            double dy1 = P3.Y - T.Y;
             if (Math.Abs(dy1) < 0.001) return;
-            double c1X = B.X + (P3.X - B.X) * (cushion1Y - B.Y) / dy1;
+            double c1X = T.X + (P3.X - T.X) * (cushion1Y - T.Y) / dy1;
             if (c1X < 5 || c1X > this.Width - 5) return;
             Point C1 = new Point((int)c1X, cushion1Y);
 
@@ -1004,31 +1091,60 @@ namespace _8BallPool
             if (c3X < 5 || c3X > this.Width - 5) return;
             Point C3 = new Point((int)c3X, cushion3Y);
 
-            // Path 1: Cue Ball -> Rail 1
-            DrawDirectionalLine(g, B, C1, Color.Yellow, 3);
-            // Path 2: Rail 1 -> Rail 2
-            DrawDirectionalLine(g, C1, C2, col, 3);
-            // Path 3: Rail 2 -> Rail 3
+            // Ghost Ball G at Target Ball along vector to Rail 1
+            double bdx = C1.X - T.X;
+            double bdy = C1.Y - T.Y;
+            double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
+            if (bdist > 1)
+            {
+                Point ghostG = new Point(
+                    (int)(T.X - (bdx / bdist) * referenceBallSize),
+                    (int)(T.Y - (bdy / bdist) * referenceBallSize));
+
+                // 1. FIRST AIM DIRECTION (Cue Ball -> Ghost Ball) -> RED
+                DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+            }
+
+            // 2. SECOND DIRECTION (Target Ball -> Rail 1) -> GREEN
+            DrawDirectionalLine(g, T, C1, Color.Lime, 3);
+            // 3. THIRD DIRECTION (Rail 1 -> Rail 2) -> BLUE
+            DrawDirectionalLine(g, C1, C2, Color.Cyan, 3);
+            // 4. FOURTH DIRECTION (Rail 2 -> Rail 3) -> MAGENTA
             DrawDirectionalLine(g, C2, C3, Color.Magenta, 3);
-            // Path 4: Rail 3 -> Target Hole
-            DrawDirectionalLine(g, C3, P, Color.Lime, 3);
+            // 5. FIFTH DIRECTION (Rail 3 -> Target Hole) -> YELLOW
+            DrawDirectionalLine(g, C3, P, Color.Gold, 3);
 
             // Rail Bounce Markers
-            DrawBounceTarget(g, C1, "1", col);
-            DrawBounceTarget(g, C2, "2", col);
-            DrawBounceTarget(g, C3, "3", col);
+            DrawBounceTarget(g, C1, "1", Color.Lime);
+            DrawBounceTarget(g, C2, "2", Color.Cyan);
+            DrawBounceTarget(g, C3, "3", Color.Magenta);
         }
 
         private void FormMain_MouseUp(object sender, MouseEventArgs e)
         {
-            isDragging = false;
+            activeDragBall = 0;
         }
 
         private void FormMain_MouseDown(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right || e.Button == MouseButtons.Middle)
+            if (e.Button == MouseButtons.Middle)
             {
-                lastBallPosition = new Point(e.X, e.Y);
+                cueBallPosition = new Point(e.X, e.Y);
+                ClampBallPosition();
+                this.Invalidate();
+                return;
+            }
+            if (e.Button == MouseButtons.Right)
+            {
+                double distCue = Math.Sqrt(Math.Pow(e.X - cueBallPosition.X, 2) + Math.Pow(e.Y - cueBallPosition.Y, 2));
+                if (distCue < 30)
+                {
+                    cueBallPosition = new Point(e.X, e.Y);
+                }
+                else
+                {
+                    targetBallPosition = new Point(e.X, e.Y);
+                }
                 ClampBallPosition();
                 this.Invalidate();
                 return;
@@ -1083,9 +1199,13 @@ namespace _8BallPool
 
         private void ClampBallPosition()
         {
-            int x = Math.Max(0, Math.Min(lastBallPosition.X, this.ClientSize.Width));
-            int y = Math.Max(0, Math.Min(lastBallPosition.Y, this.ClientSize.Height));
-            lastBallPosition = new Point(x, y);
+            int cx = Math.Max(0, Math.Min(cueBallPosition.X, this.ClientSize.Width));
+            int cy = Math.Max(0, Math.Min(cueBallPosition.Y, this.ClientSize.Height));
+            cueBallPosition = new Point(cx, cy);
+
+            int tx = Math.Max(0, Math.Min(targetBallPosition.X, this.ClientSize.Width));
+            int ty = Math.Max(0, Math.Min(targetBallPosition.Y, this.ClientSize.Height));
+            targetBallPosition = new Point(tx, ty);
         }
     }
 }

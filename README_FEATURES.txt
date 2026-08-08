@@ -3,10 +3,33 @@
 ================================================================================
 
 Welcome to the 8 Ball Pool Guideline Overlay!
-This program is an ultra-fast, smooth 60 FPS, click-through guideline helper for 8 Ball Pool.
+This program is an ultra-fast, smooth 60 FPS, click-through guideline helper for 8 Ball Pool featuring a 2-Ball System and R-G-B Color-Coded Shot Sequences.
 
 --------------------------------------------------------------------------------
-1. LIBREWOLF FOCUS GATING (SMART SAFETY FEATURE)
+1. R-G-B COLOR-CODED SHOT SEQUENCES (NO CONFUSION!)
+--------------------------------------------------------------------------------
+Every shot path uses clear color coding so you instantly know where to aim:
+
+* 🔴 RED LINE   (1st Direction) : CUE BALL AIM LINE (Where you MUST aim your cue stick!).
+* 🟢 GREEN LINE (2nd Direction) : TARGET BALL PATH (Target Ball -> Rail 1 or Pocket).
+* 🔵 BLUE LINE  (3rd Direction) : RAIL BOUNCE PATH (Rail 1 -> Rail 2 or Pocket).
+* 🟡 YELLOW LINE(4th Direction) : MULTI-RAIL PATH (Rail 2 / Rail 3 -> Pocket).
+
+--------------------------------------------------------------------------------
+2. 2-BALL SYSTEM & CONTROLS (CUE BALL & TARGET BALL)
+--------------------------------------------------------------------------------
+The overlay renders TWO distinct ball circles for 100% pool physics precision:
+
+* CUE BALL (White Circle with "CUE" label) : Represents your White Cue Ball.
+* TARGET BALL (Theme Color Circle)         : Represents the Target / Object Ball.
+
+CONTROLS:
+* MIDDLE MOUSE CLICK (Scroll Wheel)        : Moves/Drags the White Cue Ball specifically.
+* RIGHT-CLICK / RIGHT-CLICK DRAG           : Moves/Drags the Target Ball (or closest ball).
+* SHIFT + RIGHT-CLICK                      : Moves/Drags the White Cue Ball anywhere on table.
+
+--------------------------------------------------------------------------------
+3. LIBREWOLF FOCUS GATING (SMART SAFETY FEATURE)
 --------------------------------------------------------------------------------
 All global mouse hooks, right-click ball dragging, and hotkeys are automatically
 GATED to LibreWolf.exe:
@@ -17,7 +40,7 @@ GATED to LibreWolf.exe:
   instantly disables all hotkeys and mouse hooks so they never interfere with your typing!
 
 --------------------------------------------------------------------------------
-2. DYNAMIC BALL CIRCLE RESIZING (+ / - KEYS)
+4. DYNAMIC BALL CIRCLE RESIZING (+ / - KEYS)
 --------------------------------------------------------------------------------
 You can adjust the ball circle diameter live on screen to fit any resolution or pool ball size:
 
@@ -28,7 +51,7 @@ Real-time HUD notification pop-ups display current ball size in pixels (e.g. `Ba
 and the preferred size is saved automatically!
 
 --------------------------------------------------------------------------------
-3. OPACITY BUTTONS & SETTINGS
+5. OPACITY BUTTONS & SETTINGS
 --------------------------------------------------------------------------------
 You can adjust the overlay transparency dynamically by 5% steps anytime:
 
@@ -41,23 +64,10 @@ You can adjust the overlay transparency dynamically by 5% steps anytime:
 * 'O' KEY SHORTCUT        : Press 'O' anytime to cycle preset opacity levels (40% -> 60% -> 80% -> 100%).
 
 --------------------------------------------------------------------------------
-4. GUIDELINE BALL POSITIONING (IN-GAME)
---------------------------------------------------------------------------------
-To move the guideline ball center anywhere on the table:
-
-* RIGHT-CLICK / RIGHT-CLICK HOLD & DRAG (Primary): 
-  Click or hold down your Right Mouse Button anywhere on the table to position or drag the guideline ball.
-  Right-clicks are 100% blocked from reaching 8 Ball Pool when LibreWolf is focused, so your cue stick will NEVER smash!
-
-* MIDDLE MOUSE CLICK (Alternative):
-  You can also click/drag using Middle Mouse Click (Scroll Wheel).
-
---------------------------------------------------------------------------------
-5. TARGET POCKET SELECTION (CHOOSE ANY HOLE FOR TRICK SHOTS)
+6. TARGET POCKET SELECTION & GHOST BALL COLLISION
 --------------------------------------------------------------------------------
 You can change the target pocket (hole) to ANY pocket you want at any time!
-All guidelines, ghost ball projections, and 1 to 3-cushion trick shots will 
-instantly target your selected hole:
+The app calculates the exact collision point (Ghost Ball) where the Cue Ball must hit the Target Ball:
 
 * PRESS 'P' KEY : Cycle target pockets (Auto -> Top-Left -> Top-Middle -> Top-Right -> Bottom-Left -> Bottom-Middle -> Bottom-Right)
 * NUMBER KEYS 1-6 : Directly select a target hole:
@@ -70,7 +80,19 @@ instantly target your selected hole:
     - 0 : Auto-Detect (Selects the closest pocket automatically)
 
 --------------------------------------------------------------------------------
-6. SETUP MODE & WINDOW ALIGNMENT (FIRST LAUNCH)
+7. TRICK SHOTS & CUSHION REFLECTIONS (B KEY)
+--------------------------------------------------------------------------------
+Press the 'B' key to cycle through multi-cushion trick shot reflection modes:
+
+* Mode 0: Trick Shots OFF
+* Mode 1: 1-Cushion Rail Reflection Lines (Red -> Green -> Blue)
+* Mode 2: 2-Cushion Double Rail Reflections (Red -> Green -> Blue -> Yellow)
+* Mode 3: 3-Cushion Triple Rail Reflections (Red -> Green -> Blue -> Magenta -> Yellow)
+
+Each trick shot shows numbered rail targets (①, ②, ③) and directional aim arrows (➔) connecting Cue Ball -> Target Ball -> Rail -> Target Pocket!
+
+--------------------------------------------------------------------------------
+8. SETUP MODE & WINDOW ALIGNMENT (FIRST LAUNCH)
 --------------------------------------------------------------------------------
 When you open the program in Setup Mode, a GOLD OUTLINE FRAME appears:
 
@@ -84,19 +106,7 @@ When you open the program in Setup Mode, a GOLD OUTLINE FRAME appears:
 * PRESS SPACE or F1: Locks the window in place, hides the setup frame, and enables Click-Through Mode so you can play!
 
 --------------------------------------------------------------------------------
-7. TRICK SHOTS & CUSHION REFLECTIONS (B KEY)
---------------------------------------------------------------------------------
-Press the 'B' key to cycle through multi-cushion trick shot reflection modes to your selected hole:
-
-* Mode 0: Trick Shots OFF
-* Mode 1: 1-Cushion Rail Reflection Lines (Orange & Gold)
-* Mode 2: 2-Cushion Double Rail Reflections (Lime & Cyan)
-* Mode 3: 3-Cushion Triple Rail Reflections (Magenta & Sky Blue)
-
-Each trick shot shows numbered rail targets (①, ②, ③) and directional aim arrows (➔), with dynamic collision offsets calculated from your current ball radius!
-
---------------------------------------------------------------------------------
-8. LASER COLOR THEMES (T KEY)
+9. LASER COLOR THEMES (T KEY)
 --------------------------------------------------------------------------------
 Press the 'T' key to cycle between 7 high-contrast neon theme colors:
 
@@ -109,9 +119,9 @@ Press the 'T' key to cycle between 7 high-contrast neon theme colors:
 7. Classic White
 
 --------------------------------------------------------------------------------
-9. AUTOMATIC CONFIGURATION SAVING
+10. AUTOMATIC CONFIGURATION SAVING
 --------------------------------------------------------------------------------
-Your window position, size, opacity, color theme, trick shot mode, target pocket, and reference ball size are automatically saved to `guideline_config.txt`. Every time you launch the app, it restores your exact setup automatically!
+Your window position, size, opacity, color theme, trick shot mode, target pocket, reference ball size, Cue Ball position, and Target Ball position are automatically saved to `guideline_config.txt`. Every time you launch the app, it restores your exact setup automatically!
 
 ================================================================================
                        HOTKEY & CONTROL SUMMARY CHEAT-SHEET
@@ -119,11 +129,15 @@ Your window position, size, opacity, color theme, trick shot mode, target pocket
 | ACTION                          | CONTROL / HOTKEY                           |
 |---------------------------------|--------------------------------------------|
 | Target Process Focus            | Active ONLY when LibreWolf.exe is focused  |
+| First Aim Line Color            | 🔴 RED (Cue Ball Aim Line)                  |
+| Second Path Color               | 🟢 GREEN (Target Ball Path)                 |
+| Third Path Color                | 🔵 BLUE (Rail Bounce Path)                  |
+| Move Cue Ball (White Ball)      | Middle-Click or Shift + Right-Click Drag   |
+| Move Target Ball (Color Ball)   | Right-Click or Right-Click Drag            |
 | Increase / Decrease Ball Size   | '+' / '-' Keys or Numpad '+' / '-'         |
 | Lower Opacity (-5%)             | [ Key (Left Bracket) or [ Lower ] Button   |
 | Higher Opacity (+5%)            | ] Key (Right Bracket) or [ Higher ] Button |
 | Cycle Opacity Presets           | O Key (40% -> 60% -> 80% -> 100%)          |
-| Move Guideline Ball             | Right-Click or Right-Click Hold & Drag     |
 | Select Target Hole              | P key (Cycle) OR Number Keys 1-6 (0=Auto)  |
 | Move Window Position            | Left-Click Drag (Setup Mode) or Arrow Keys |
 | Resize Window Size              | Ctrl + Arrow Keys                          |
