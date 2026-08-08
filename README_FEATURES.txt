@@ -3,10 +3,22 @@
 ================================================================================
 
 Welcome to the 8 Ball Pool Guideline Overlay!
-This program is an ultra-fast, smooth 60 FPS, click-through guideline helper for 8 Ball Pool featuring a 2-Ball System and R-G-B Color-Coded Shot Sequences.
+This program is an ultra-fast, smooth 60 FPS, click-through guideline helper for 8 Ball Pool featuring Mode switching (NORMAL MODE vs TRICKSHOT MODE).
 
 --------------------------------------------------------------------------------
-1. R-G-B COLOR-CODED SHOT SEQUENCES (NO CONFUSION!)
+1. MODE SWITCHING: NORMAL MODE vs TRICKSHOT MODE ('M' or 'B' KEY)
+--------------------------------------------------------------------------------
+Easily switch between aiming modes anytime with the 'M' or 'B' key:
+
+* 🎯 NORMAL MODE (All 6 Pocket Guidelines) : Renders direct aim lines to ALL 6 POCKETS simultaneously from the Target Ball, plus the Red Cue Ball aim line & ghost ball to your target pocket!
+* 🎱 TRICKSHOT MODE (1-Cushion)           : Calculates 1-cushion bank shots (Red -> Green -> Blue).
+* 🎱 TRICKSHOT MODE (2-Cushion)           : Calculates 2-cushion double bank shots (Red -> Green -> Blue -> Yellow).
+* 🎱 TRICKSHOT MODE (3-Cushion)           : Calculates 3-cushion triple bank shots.
+
+Pressing 'M' or 'B' displays a real-time HUD notification pop-up confirming your active mode!
+
+--------------------------------------------------------------------------------
+2. R-G-B COLOR-CODED SHOT SEQUENCES (NO CONFUSION!)
 --------------------------------------------------------------------------------
 Every shot path uses clear color coding so you instantly know where to aim:
 
@@ -16,7 +28,7 @@ Every shot path uses clear color coding so you instantly know where to aim:
 * 🟡 YELLOW LINE(4th Direction) : MULTI-RAIL PATH (Rail 2 / Rail 3 -> Pocket).
 
 --------------------------------------------------------------------------------
-2. 2-BALL SYSTEM & CONTROLS (CUE BALL & TARGET BALL)
+3. 2-BALL SYSTEM & CONTROLS (CUE BALL & TARGET BALL)
 --------------------------------------------------------------------------------
 The overlay renders TWO distinct ball circles for 100% pool physics precision:
 
@@ -29,7 +41,7 @@ CONTROLS:
 * SHIFT + RIGHT-CLICK                      : Moves/Drags the White Cue Ball anywhere on table.
 
 --------------------------------------------------------------------------------
-3. LIBREWOLF FOCUS GATING (SMART SAFETY FEATURE)
+4. LIBREWOLF FOCUS GATING (SMART SAFETY FEATURE)
 --------------------------------------------------------------------------------
 All global mouse hooks, right-click ball dragging, and hotkeys are automatically
 GATED to LibreWolf.exe:
@@ -40,7 +52,7 @@ GATED to LibreWolf.exe:
   instantly disables all hotkeys and mouse hooks so they never interfere with your typing!
 
 --------------------------------------------------------------------------------
-4. DYNAMIC BALL CIRCLE RESIZING (+ / - KEYS)
+5. DYNAMIC BALL CIRCLE RESIZING (+ / - KEYS)
 --------------------------------------------------------------------------------
 You can adjust the ball circle diameter live on screen to fit any resolution or pool ball size:
 
@@ -51,7 +63,7 @@ Real-time HUD notification pop-ups display current ball size in pixels (e.g. `Ba
 and the preferred size is saved automatically!
 
 --------------------------------------------------------------------------------
-5. OPACITY BUTTONS & SETTINGS
+6. OPACITY BUTTONS & SETTINGS
 --------------------------------------------------------------------------------
 You can adjust the overlay transparency dynamically by 5% steps anytime:
 
@@ -64,7 +76,7 @@ You can adjust the overlay transparency dynamically by 5% steps anytime:
 * 'O' KEY SHORTCUT        : Press 'O' anytime to cycle preset opacity levels (40% -> 60% -> 80% -> 100%).
 
 --------------------------------------------------------------------------------
-6. TARGET POCKET SELECTION & GHOST BALL COLLISION
+7. TARGET POCKET SELECTION & GHOST BALL COLLISION
 --------------------------------------------------------------------------------
 You can change the target pocket (hole) to ANY pocket you want at any time!
 The app calculates the exact collision point (Ghost Ball) where the Cue Ball must hit the Target Ball:
@@ -78,18 +90,6 @@ The app calculates the exact collision point (Ghost Ball) where the Cue Ball mus
     - 5 : Bottom-Middle Pocket
     - 6 : Bottom-Right Pocket
     - 0 : Auto-Detect (Selects the closest pocket automatically)
-
---------------------------------------------------------------------------------
-7. TRICK SHOTS & CUSHION REFLECTIONS (B KEY)
---------------------------------------------------------------------------------
-Press the 'B' key to cycle through multi-cushion trick shot reflection modes:
-
-* Mode 0: Trick Shots OFF
-* Mode 1: 1-Cushion Rail Reflection Lines (Red -> Green -> Blue)
-* Mode 2: 2-Cushion Double Rail Reflections (Red -> Green -> Blue -> Yellow)
-* Mode 3: 3-Cushion Triple Rail Reflections (Red -> Green -> Blue -> Magenta -> Yellow)
-
-Each trick shot shows numbered rail targets (①, ②, ③) and directional aim arrows (➔) connecting Cue Ball -> Target Ball -> Rail -> Target Pocket!
 
 --------------------------------------------------------------------------------
 8. SETUP MODE & WINDOW ALIGNMENT (FIRST LAUNCH)
@@ -129,6 +129,8 @@ Your window position, size, opacity, color theme, trick shot mode, target pocket
 | ACTION                          | CONTROL / HOTKEY                           |
 |---------------------------------|--------------------------------------------|
 | Target Process Focus            | Active ONLY when LibreWolf.exe is focused  |
+| Mode Switch (Normal / Trickshot)| M Key or B Key                             |
+| Normal Mode Display             | Direct guidelines to ALL 6 POCKETS at once |
 | First Aim Line Color            | 🔴 RED (Cue Ball Aim Line)                  |
 | Second Path Color               | 🟢 GREEN (Target Ball Path)                 |
 | Third Path Color                | 🔵 BLUE (Rail Bounce Path)                  |
@@ -142,6 +144,5 @@ Your window position, size, opacity, color theme, trick shot mode, target pocket
 | Move Window Position            | Left-Click Drag (Setup Mode) or Arrow Keys |
 | Resize Window Size              | Ctrl + Arrow Keys                          |
 | Lock / Toggle Click-Through     | Space Bar or F1                            |
-| Cycle 1-3 Cushion Trick Shots   | B Key                                      |
 | Cycle Color Themes              | T Key                                      |
 ================================================================================

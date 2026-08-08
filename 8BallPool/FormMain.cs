@@ -35,6 +35,7 @@ namespace _8BallPool
         private const int VK_RIGHT = 0x27;
         private const int VK_T = 0x54;
         private const int VK_B = 0x42;
+        private const int VK_M = 0x4D; // M key for Mode Toggle (Normal vs Trickshot)
         private const int VK_P = 0x50; // P key to cycle target pocket
         private const int VK_O = 0x4F; // O key to cycle opacity
         private const int VK_OEM_4 = 0xDB; // '[' key for lower opacity (-5%)
@@ -148,6 +149,7 @@ namespace _8BallPool
         private bool wasRightKey;
         private bool wasTDown;
         private bool wasBDown;
+        private bool wasMDown;
         private bool wasPDown;
         private bool wasODown;
         private bool wasLBracketDown;
@@ -584,16 +586,18 @@ namespace _8BallPool
             }
             wasTDown = isTDown;
 
-            // B Key: Cycle Trick Shot / Cushion Bounce Modes (0=Off, 1=1-Cushion, 2=2-Cushion, 3=3-Cushion)
+            // M Key or B Key: Cycle Modes (Normal Mode -> 1-Cushion Trickshot -> 2-Cushion -> 3-Cushion)
+            bool isMDown = (GetAsyncKeyState(VK_M) & 0x8000) != 0;
             bool isBDown = (GetAsyncKeyState(VK_B) & 0x8000) != 0;
-            if (isBDown && !wasBDown)
+            if ((isMDown && !wasMDown) || (isBDown && !wasBDown))
             {
                 cushionMode = (cushionMode + 1) % 4;
-                string modeTxt = cushionMode == 0 ? "Off" : (cushionMode + "-Cushion");
-                ShowHUD("Bounce Mode: " + modeTxt);
+                string modeTxt = cushionMode == 0 ? "NORMAL MODE (Direct Aim)" : ("TRICKSHOT MODE (" + cushionMode + "-Cushion)");
+                ShowHUD(modeTxt);
                 SaveConfig();
                 this.Invalidate();
             }
+            wasMDown = isMDown;
             wasBDown = isBDown;
 
             // P Key: Cycle Target Pocket (Auto -> TopLeft -> TopMiddle -> TopRight -> BottomLeft -> BottomMiddle -> BottomRight)
@@ -683,7 +687,8 @@ namespace _8BallPool
                 using (Font font = new Font("Segoe UI", 9, FontStyle.Bold))
                 using (Brush textBrush = new SolidBrush(Color.Gold))
                 {
-                    string txt = "SETUP MODE: Left-Click Drag to Move | Ctrl+Arrows to Resize | SPACE to Lock";
+                    string activeModeStr = cushionMode == 0 ? "NORMAL" : ("TRICKSHOT (" + cushionMode + "-CUSHION)");
+                    string txt = "SETUP MODE [" + activeModeStr + "]: Press M / B to Change Mode | SPACE to Lock";
                     g.DrawString(txt, font, textBrush, 15, 17);
                 }
 
@@ -718,10 +723,16 @@ namespace _8BallPool
 
             DrawCorners(g, themeColor);
             DrawPockets(g, themeColor);
-            DrawGuideLinesAndGhost(g, themeColor, activeTargetPocket);
-            
-            if (cushionMode > 0)
+
+            if (cushionMode == 0)
             {
+                // NORMAL MODE: Render guidelines to ALL 6 POCKETS simultaneously!
+                DrawAllPocketGuideLines(g, themeColor);
+            }
+            else
+            {
+                // TRICKSHOT MODE: Render focused single-target guidelines & cushion bounces
+                DrawGuideLinesAndGhost(g, themeColor, activeTargetPocket);
                 DrawTrickShots(g, themeColor, activeTargetPocket);
             }
 
@@ -844,6 +855,46 @@ namespace _8BallPool
             {
                 g.DrawEllipse(targetPen, rectTarget);
                 g.DrawEllipse(insidePen, rectTargetCenter);
+            }
+        }
+
+        private void DrawAllPocketGuideLines(Graphics g, Color themeColor)
+        {
+            using (Pen pen = new Pen(themeColor, GuideLineThickness))
+            {
+                pen.DashStyle = DashStyle.Custom;
+                pen.DashPattern = new float[] { 4, 4 };
+                foreach (PocketPosition position in Enum.GetValues(typeof(PocketPosition)))
+                {
+                    g.DrawLine(pen, targetBallPosition, Pocket.GetPoint(position));
+                }
+            }
+
+            // Draw Cue Ball Aim Line to Ghost Ball for active/closest pocket
+            PocketPosition activePocket = GetTargetPocket();
+            Point targetPocketPt = Pocket.GetPoint(activePocket);
+            double dx = targetPocketPt.X - targetBallPosition.X;
+            double dy = targetPocketPt.Y - targetBallPosition.Y;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+            if (dist >= 1)
+            {
+                double ux = dx / dist;
+                double uy = dy / dist;
+                Point ghostPos = new Point(
+                    (int)(targetBallPosition.X - ux * referenceBallSize),
+                    (int)(targetBallPosition.Y - uy * referenceBallSize));
+
+                // 1. Cue Ball Aim Line -> RED
+                DrawDirectionalLine(g, cueBallPosition, ghostPos, Color.Red, 3);
+
+                // 2. Ghost Ball Circle
+                int halfBall = referenceBallSize / 2;
+                Rectangle rectGhost = new Rectangle(ghostPos.X - halfBall, ghostPos.Y - halfBall, referenceBallSize, referenceBallSize);
+                using (Pen ghostPen = new Pen(Color.FromArgb(200, themeColor), 2))
+                {
+                    ghostPen.DashStyle = DashStyle.Dash;
+                    g.DrawEllipse(ghostPen, rectGhost);
+                }
             }
         }
 
