@@ -900,8 +900,8 @@ namespace _8BallPool
                     (int)(targetBallPosition.X - ux * referenceBallSize),
                     (int)(targetBallPosition.Y - uy * referenceBallSize));
 
-                // A. Red Cue Ball Aim Line (Cue Ball -> Ghost Ball)
-                DrawDirectionalLine(g, cueBallPosition, ghostPos, Color.Red, 3);
+                // A. Red Cue Ball Aim Line (Extended Backwards for Cue Stick alignment + Forward to Ghost Ball)
+                DrawRedAimLine(g, cueBallPosition, ghostPos);
 
                 // B. Ghost Ball Circle
                 int halfBall = referenceBallSize / 2;
@@ -933,6 +933,30 @@ namespace _8BallPool
                     tanPen.DashStyle = DashStyle.Dot;
                     g.DrawLine(tanPen, tangentEnd1, tangentEnd2);
                 }
+            }
+        }
+
+        private void DrawRedAimLine(Graphics g, Point cuePt, Point ghostPt)
+        {
+            double dx = ghostPt.X - cuePt.X;
+            double dy = ghostPt.Y - cuePt.Y;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+
+            if (dist > 1)
+            {
+                double ux = dx / dist;
+                double uy = dy / dist;
+
+                // Extend red line BACKWARDS behind Cue Ball (where cue stick sits)
+                Point backPt = new Point((int)(cuePt.X - ux * 2000), (int)(cuePt.Y - uy * 2000));
+                using (Pen penBack = new Pen(Color.FromArgb(160, Color.Red), 2))
+                {
+                    penBack.DashStyle = DashStyle.Dash;
+                    g.DrawLine(penBack, cuePt, backPt);
+                }
+
+                // Draw main Red aim line FORWARD from Cue Ball to Ghost Ball
+                DrawDirectionalLine(g, cuePt, ghostPt, Color.Red, 3);
             }
         }
 
@@ -1078,8 +1102,8 @@ namespace _8BallPool
                         (int)(T.X - (bdx / bdist) * referenceBallSize),
                         (int)(T.Y - (bdy / bdist) * referenceBallSize));
 
-                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball)
-                    DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball, with backward extension)
+                    DrawRedAimLine(g, C, ghostG);
 
                     // Ghost Ball Circle
                     int halfBall = referenceBallSize / 2;
@@ -1166,8 +1190,8 @@ namespace _8BallPool
                         (int)(T.X - (bdx / bdist) * referenceBallSize),
                         (int)(T.Y - (bdy / bdist) * referenceBallSize));
 
-                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball)
-                    DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball, with backward extension)
+                    DrawRedAimLine(g, C, ghostG);
 
                     // Ghost Ball Circle
                     int halfBall = referenceBallSize / 2;
@@ -1266,8 +1290,8 @@ namespace _8BallPool
                         (int)(T.X - (bdx / bdist) * referenceBallSize),
                         (int)(T.Y - (bdy / bdist) * referenceBallSize));
 
-                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball)
-                    DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball, with backward extension)
+                    DrawRedAimLine(g, C, ghostG);
 
                     // Ghost Ball Circle
                     int halfBall = referenceBallSize / 2;
