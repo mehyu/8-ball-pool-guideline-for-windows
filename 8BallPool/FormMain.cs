@@ -1034,19 +1034,7 @@ namespace _8BallPool
                 return;
             }
 
-            Rectangle hitArea = new Rectangle(
-                lastBallPosition.X - BallHitAreaRadius,
-                lastBallPosition.Y - BallHitAreaRadius,
-                BallHitAreaRadius * 2,
-                BallHitAreaRadius * 2);
-
-            if (hitArea.Contains(e.X, e.Y))
-            {
-                isDragging = true;
-                lastBallPosition = new Point(e.X, e.Y);
-                this.Invalidate();
-            }
-            else if (!isClickThrough && e.Button == MouseButtons.Left)
+            if (!isClickThrough && e.Button == MouseButtons.Left)
             {
                 // Check if user clicked [ Lower ] or [ Higher ] Opacity buttons on Setup Banner
                 Rectangle minusRect = new Rectangle(this.Width - 230, 14, 60, 24);
@@ -1075,26 +1063,7 @@ namespace _8BallPool
         private void FormMain_MouseMove(object sender, MouseEventArgs e)
         {
             if (isClickThrough) return;
-
-            Rectangle hitArea = new Rectangle(
-                lastBallPosition.X - BallHitAreaRadius,
-                lastBallPosition.Y - BallHitAreaRadius,
-                BallHitAreaRadius * 2,
-                BallHitAreaRadius * 2);
-
-            if (hitArea.Contains(e.X, e.Y) || isDragging)
-            {
-                Cursor.Current = Cursors.Hand;
-                if (isDragging)
-                {
-                    lastBallPosition = new Point(e.X, e.Y);
-                    this.Invalidate();
-                }
-            }
-            else
-            {
-                Cursor.Current = Cursors.Default;
-            }
+            Cursor.Current = Cursors.Default;
         }
 
         private void FormMain_KeyDown(object sender, KeyEventArgs e)
