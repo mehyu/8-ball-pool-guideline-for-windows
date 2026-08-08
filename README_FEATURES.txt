@@ -6,16 +6,20 @@ Welcome to the 8 Ball Pool Guideline Overlay!
 This program is an ultra-fast, smooth 60 FPS, click-through guideline helper for 8 Ball Pool featuring Mode switching (NORMAL MODE vs TRICKSHOT MODE).
 
 --------------------------------------------------------------------------------
-1. MODE SWITCHING: NORMAL MODE vs TRICKSHOT MODE ('M' or 'B' KEY)
+1. MODE SWITCHING: NORMAL MODE vs TRICKSHOT MODE ('M', 'B', or 'N' KEY)
 --------------------------------------------------------------------------------
-Easily switch between aiming modes anytime with the 'M' or 'B' key:
+Easily switch between aiming modes anytime:
 
 * 🎯 NORMAL MODE (All 6 Pocket Guidelines) : Renders direct aim lines to ALL 6 POCKETS simultaneously from the Target Ball, plus the Red Cue Ball aim line & ghost ball to your target pocket!
 * 🎱 TRICKSHOT MODE (1-Cushion)           : Calculates 1-cushion bank shots (Red -> Green -> Blue).
 * 🎱 TRICKSHOT MODE (2-Cushion)           : Calculates 2-cushion double bank shots (Red -> Green -> Blue -> Yellow).
 * 🎱 TRICKSHOT MODE (3-Cushion)           : Calculates 3-cushion triple bank shots.
 
-Pressing 'M' or 'B' displays a real-time HUD notification pop-up confirming your active mode!
+HOTKEYS FOR MODES:
+* 'M' KEY or 'B' KEY : Cycle modes in sequence: Normal Mode -> 1-Cushion -> 2-Cushion -> 3-Cushion -> Normal Mode...
+* 'N' KEY            : Direct shortcut to jump straight to NORMAL MODE anytime!
+
+Pressing any mode key displays a real-time HUD notification pop-up confirming your active mode!
 
 --------------------------------------------------------------------------------
 2. R-G-B COLOR-CODED SHOT SEQUENCES (NO CONFUSION!)
@@ -129,7 +133,8 @@ Your window position, size, opacity, color theme, trick shot mode, target pocket
 | ACTION                          | CONTROL / HOTKEY                           |
 |---------------------------------|--------------------------------------------|
 | Target Process Focus            | Active ONLY when LibreWolf.exe is focused  |
-| Mode Switch (Normal / Trickshot)| M Key or B Key                             |
+| Cycle Modes (Normal / 1-3 Cushion) | M Key or B Key                          |
+| Direct Normal Mode Shortcut     | N Key                                      |
 | Normal Mode Display             | Direct guidelines to ALL 6 POCKETS at once |
 | First Aim Line Color            | 🔴 RED (Cue Ball Aim Line)                  |
 | Second Path Color               | 🟢 GREEN (Target Ball Path)                 |

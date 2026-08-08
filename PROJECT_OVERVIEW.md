@@ -36,6 +36,7 @@ The goal of the project is to provide mathematically precise, real-time aiming a
 ### B. Low-Level Win32 Mouse Hooking (`HookCallback`)
 - Installs a low-level global mouse hook via `SetWindowsHookEx(WH_MOUSE_LL, ...)` to capture Right-Click press and drag events across the screen.
 - Intercepts `WM_RBUTTONDOWN` and `WM_RBUTTONUP` when over the overlay canvas, blocking right-clicks from reaching the game window (preventing accidental cue stick fires).
+- Left-clicks are strictly gated to setup window dragging and opacity buttons, keeping ball circle movement strictly on Right-Click or Middle-Click.
 
 ### C. Process Focus Gating (`LibreWolf.exe`)
 - Queries Win32 `GetForegroundWindow()` and `GetWindowThreadProcessId()` on a 60 FPS timer loop.
@@ -63,6 +64,13 @@ The goal of the project is to provide mathematically precise, real-time aiming a
   3. 🔵 **BLUE**: 3rd Direction — **First Rail Bounce** (Rail 1 to Rail 2 or Pocket).
   4. 🟡 **YELLOW / MAGENTA**: 4th/5th Directions — Multi-rail cushions.
 
+### G. Mode Switching System (`DrawAllPocketGuideLines` vs `DrawTrickShots`)
+- Switched via **`M`** / **`B`** key (cycle modes) or **`N`** key (direct Normal Mode shortcut) with real-time HUD visual notifications:
+  - **`cushionMode == 0` (NORMAL MODE)**: Renders direct aim guidelines to **ALL 6 POCKETS** simultaneously on the table from the Target Ball, plus the 🔴 **RED** Cue Ball aim line and ghost ball for the active/closest pocket.
+  - **`cushionMode == 1` (TRICKSHOT MODE 1-CUSHION)**: Focuses on single-target 1-Cushion bank shot reflection trajectories.
+  - **`cushionMode == 2` (TRICKSHOT MODE 2-CUSHION)**: Focuses on 2-Cushion double rail bank shot trajectories.
+  - **`cushionMode == 3` (TRICKSHOT MODE 3-CUSHION)**: Focuses on 3-Cushion triple rail bank shot trajectories.
+
 ---
 
 ## 4. Current Controls & Hotkeys Summary
@@ -70,12 +78,15 @@ The goal of the project is to provide mathematically precise, real-time aiming a
 | Feature | Shortcut / Action |
 |---|---|
 | **Process Focus** | Active ONLY when `LibreWolf.exe` is focused |
+| **Cycle Modes** | `M` Key or `B` Key (Normal Mode -> 1-Cushion -> 2-Cushion -> 3-Cushion) |
+| **Normal Mode Shortcut** | `N` Key (Direct shortcut to Normal Mode) |
+| **Normal Mode Display** | Direct dashed guidelines to **ALL 6 POCKETS** at once |
+| **Shot Color Sequence** | 🔴 RED (Aim Line) -> 🟢 GREEN (Target Path) -> 🔵 BLUE (Bounce) |
 | **Move Cue Ball (White)** | Middle Mouse Click (Scroll Wheel) OR `Shift` + Right-Click |
 | **Move Target Ball (Color)** | Right-Click / Right-Click Drag |
 | **Resize Ball Circle** | `+` / `-` Keys OR Numpad `+` / `-` |
 | **Adjust Opacity** | `[` / `]` Keys OR `O` Key (Preset cycle: 40% -> 60% -> 80% -> 100%) |
 | **Select Target Hole** | `P` Key (Cycle) OR Number Keys `1-6` (`0` = Auto-closest) |
-| **Trickshot Modes** | `B` Key (0 = Off, 1 = 1-Cushion, 2 = 2-Cushion, 3 = 3-Cushion) |
 | **Color Themes** | `T` Key (Cycle 7 neon themes) |
 | **Lock / Setup Mode** | `SPACE` or `F1` |
 | **Move / Resize Overlay** | Setup Mode Left-Click Drag / `Ctrl` + Arrow Keys |

@@ -36,6 +36,7 @@ namespace _8BallPool
         private const int VK_T = 0x54;
         private const int VK_B = 0x42;
         private const int VK_M = 0x4D; // M key for Mode Toggle (Normal vs Trickshot)
+        private const int VK_N = 0x4E; // N key for Normal Mode Direct Shortcut
         private const int VK_P = 0x50; // P key to cycle target pocket
         private const int VK_O = 0x4F; // O key to cycle opacity
         private const int VK_OEM_4 = 0xDB; // '[' key for lower opacity (-5%)
@@ -150,6 +151,7 @@ namespace _8BallPool
         private bool wasTDown;
         private bool wasBDown;
         private bool wasMDown;
+        private bool wasNDown;
         private bool wasPDown;
         private bool wasODown;
         private bool wasLBracketDown;
@@ -432,6 +434,8 @@ namespace _8BallPool
                 wasRightKey = false;
                 wasTDown = false;
                 wasBDown = false;
+                wasMDown = false;
+                wasNDown = false;
                 wasPDown = false;
                 wasODown = false;
                 wasLBracketDown = false;
@@ -599,6 +603,17 @@ namespace _8BallPool
             }
             wasMDown = isMDown;
             wasBDown = isBDown;
+
+            // N Key: Direct Shortcut for NORMAL MODE (All 6 Pockets Guidelines)
+            bool isNDown = (GetAsyncKeyState(VK_N) & 0x8000) != 0;
+            if (isNDown && !wasNDown)
+            {
+                cushionMode = 0;
+                ShowHUD("NORMAL MODE (Direct Aim)");
+                SaveConfig();
+                this.Invalidate();
+            }
+            wasNDown = isNDown;
 
             // P Key: Cycle Target Pocket (Auto -> TopLeft -> TopMiddle -> TopRight -> BottomLeft -> BottomMiddle -> BottomRight)
             bool isPDown = (GetAsyncKeyState(VK_P) & 0x8000) != 0;
