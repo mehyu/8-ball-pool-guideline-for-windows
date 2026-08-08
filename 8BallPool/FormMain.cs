@@ -741,13 +741,12 @@ namespace _8BallPool
 
             if (cushionMode == 0)
             {
-                // NORMAL MODE: Render guidelines to ALL 6 POCKETS simultaneously!
+                // NORMAL MODE: Guidelines to all 6 pockets + direct Cue Ball -> Target Ball collision physics
                 DrawAllPocketGuideLines(g, themeColor);
             }
             else
             {
-                // TRICKSHOT MODE: Render focused single-target guidelines & cushion bounces
-                DrawGuideLinesAndGhost(g, themeColor, activeTargetPocket);
+                // TRICKSHOT MODE: Focused single-target 1-3 cushion bank shots
                 DrawTrickShots(g, themeColor, activeTargetPocket);
             }
 
@@ -875,6 +874,7 @@ namespace _8BallPool
 
         private void DrawAllPocketGuideLines(Graphics g, Color themeColor)
         {
+            // 1. Dashed guidelines from Target Ball to ALL 6 Pockets
             using (Pen pen = new Pen(themeColor, GuideLineThickness))
             {
                 pen.DashStyle = DashStyle.Custom;
@@ -885,24 +885,25 @@ namespace _8BallPool
                 }
             }
 
-            // Draw Cue Ball Aim Line to Ghost Ball for active/closest pocket
-            PocketPosition activePocket = GetTargetPocket();
-            Point targetPocketPt = Pocket.GetPoint(activePocket);
-            double dx = targetPocketPt.X - targetBallPosition.X;
-            double dy = targetPocketPt.Y - targetBallPosition.Y;
+            // 2. Cue Ball -> Target Ball Collision Physics
+            double dx = targetBallPosition.X - cueBallPosition.X;
+            double dy = targetBallPosition.Y - cueBallPosition.Y;
             double dist = Math.Sqrt(dx * dx + dy * dy);
+
             if (dist >= 1)
             {
                 double ux = dx / dist;
                 double uy = dy / dist;
+
+                // Ghost Ball Impact Position G (on near side of Target Ball facing Cue Ball)
                 Point ghostPos = new Point(
                     (int)(targetBallPosition.X - ux * referenceBallSize),
                     (int)(targetBallPosition.Y - uy * referenceBallSize));
 
-                // 1. Cue Ball Aim Line -> RED
+                // A. Red Cue Ball Aim Line (Cue Ball -> Ghost Ball)
                 DrawDirectionalLine(g, cueBallPosition, ghostPos, Color.Red, 3);
 
-                // 2. Ghost Ball Circle
+                // B. Ghost Ball Circle
                 int halfBall = referenceBallSize / 2;
                 Rectangle rectGhost = new Rectangle(ghostPos.X - halfBall, ghostPos.Y - halfBall, referenceBallSize, referenceBallSize);
                 using (Pen ghostPen = new Pen(Color.FromArgb(200, themeColor), 2))
@@ -910,62 +911,27 @@ namespace _8BallPool
                     ghostPen.DashStyle = DashStyle.Dash;
                     g.DrawEllipse(ghostPen, rectGhost);
                 }
-            }
-        }
 
-        private void DrawGuideLinesAndGhost(Graphics g, Color themeColor, PocketPosition targetPocket)
-        {
-            Point targetPocketPt = Pocket.GetPoint(targetPocket);
-            double dx = targetPocketPt.X - targetBallPosition.X;
-            double dy = targetPocketPt.Y - targetBallPosition.Y;
-            double dist = Math.Sqrt(dx * dx + dy * dy);
+                // C. Target Ball Path Line (extending forward along collision direction)
+                Point targetForwardEnd = new Point(
+                    (int)(targetBallPosition.X + ux * 2000),
+                    (int)(targetBallPosition.Y + uy * 2000));
+                using (Pen targetPathPen = new Pen(Color.Lime, GuideLineThickness))
+                {
+                    targetPathPen.DashStyle = DashStyle.Custom;
+                    targetPathPen.DashPattern = new float[] { 4, 4 };
+                    g.DrawLine(targetPathPen, targetBallPosition, targetForwardEnd);
+                }
 
-            if (dist < 1) return;
-
-            double ux = dx / dist;
-            double uy = dy / dist;
-
-            // Ghost ball collision center where Cue Ball collides with Target Ball
-            Point ghostPos = new Point(
-                (int)(targetBallPosition.X - ux * referenceBallSize),
-                (int)(targetBallPosition.Y - uy * referenceBallSize));
-
-            // 1. FIRST DIRECTION (Aim Line: Cue Ball -> Ghost Ball) -> RED
-            DrawDirectionalLine(g, cueBallPosition, ghostPos, Color.Red, 3);
-
-            // 2. SECOND DIRECTION (Target Ball Path -> Pocket) -> GREEN
-            using (Pen targetPathPen = new Pen(Color.Lime, GuideLineThickness))
-            {
-                targetPathPen.DashStyle = DashStyle.Custom;
-                targetPathPen.DashPattern = new float[] { 4, 4 };
-                g.DrawLine(targetPathPen, targetBallPosition, targetPocketPt);
-            }
-
-            // 3. Ghost Ball Circle
-            int halfBall = referenceBallSize / 2;
-            Rectangle rectGhost = new Rectangle(ghostPos.X - halfBall, ghostPos.Y - halfBall, referenceBallSize, referenceBallSize);
-            using (Pen ghostPen = new Pen(Color.FromArgb(200, themeColor), 2))
-            {
-                ghostPen.DashStyle = DashStyle.Dash;
-                g.DrawEllipse(ghostPen, rectGhost);
-            }
-
-            // 4. Cue Ball Tangent Deflection Line (post-collision) -> BLUE
-            double cdx = ghostPos.X - cueBallPosition.X;
-            double cdy = ghostPos.Y - cueBallPosition.Y;
-            double cdist = Math.Sqrt(cdx * cdx + cdy * cdy);
-            if (cdist > 1)
-            {
+                // D. Cue Ball Tangent Deflection Line (90 degrees post-collision)
                 double tx = -uy;
                 double ty = ux;
-                double dot = (cueBallPosition.X - ghostPos.X) * tx + (cueBallPosition.Y - ghostPos.Y) * ty;
-                if (dot < 0) { tx = -tx; ty = -ty; }
-
-                Point tangentEnd = new Point((int)(ghostPos.X + tx * 35), (int)(ghostPos.Y + ty * 35));
+                Point tangentEnd1 = new Point((int)(ghostPos.X + tx * 60), (int)(ghostPos.Y + ty * 60));
+                Point tangentEnd2 = new Point((int)(ghostPos.X - tx * 60), (int)(ghostPos.Y - ty * 60));
                 using (Pen tanPen = new Pen(Color.Cyan, 2))
                 {
                     tanPen.DashStyle = DashStyle.Dot;
-                    g.DrawLine(tanPen, ghostPos, tangentEnd);
+                    g.DrawLine(tanPen, tangentEnd1, tangentEnd2);
                 }
             }
         }
@@ -1027,163 +993,306 @@ namespace _8BallPool
         {
             Point target = Pocket.GetPoint(targetPos);
 
+            if (cushionMode == 1)
+            {
+                DrawBest1CushionBounce(g, cueBallPosition, targetBallPosition, target);
+            }
+            else if (cushionMode == 2)
+            {
+                DrawBest2CushionBounce(g, cueBallPosition, targetBallPosition, target);
+            }
+            else if (cushionMode == 3)
+            {
+                DrawBest3CushionBounce(g, cueBallPosition, targetBallPosition, target);
+            }
+        }
+
+        private void DrawBest1CushionBounce(Graphics g, Point C, Point T, Point P)
+        {
             int ballRadius = referenceBallSize / 2;
             int topY = ballRadius;
             int botY = this.Height - ballRadius;
             int leftX = ballRadius;
             int rightX = this.Width - ballRadius;
 
-            // Bank Shots (Target Ball bounces off cushion to target pocket)
-            if (cushionMode == 1)
-            {
-                Draw1CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, true, Color.Gold);
-                Draw1CushionBounce(g, cueBallPosition, targetBallPosition, target, botY, true, Color.Orange);
-            }
-            else if (cushionMode == 2)
-            {
-                Draw2CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, rightX, Color.Lime);
-                Draw2CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, leftX, Color.Cyan);
-            }
-            else if (cushionMode == 3)
-            {
-                Draw3CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, rightX, botY, Color.Magenta);
-                Draw3CushionBounce(g, cueBallPosition, targetBallPosition, target, topY, leftX, botY, Color.DeepSkyBlue);
-            }
-        }
+            Point bestC1 = Point.Empty;
+            double minTotalDist = double.MaxValue;
 
-        private void Draw1CushionBounce(Graphics g, Point C, Point T, Point P, int cushionY, bool isHorizontal, Color col)
-        {
-            if (isHorizontal)
+            // 1. Horizontal Cushions (Top & Bottom)
+            int[] yCushions = new int[] { topY, botY };
+            foreach (int cushionY in yCushions)
             {
                 double mirPy = 2.0 * cushionY - P.Y;
                 double dy = mirPy - T.Y;
-                if (Math.Abs(dy) < 0.001) return;
-                double bounceX = T.X + (P.X - T.X) * (cushionY - T.Y) / dy;
-                if (bounceX >= 5 && bounceX <= this.Width - 5)
+                if (Math.Abs(dy) >= 0.001)
                 {
-                    Point C1 = new Point((int)bounceX, cushionY);
-                    
-                    // Ghost Ball G at Target Ball along vector to Rail Bounce C1
-                    double bdx = C1.X - T.X;
-                    double bdy = C1.Y - T.Y;
-                    double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
-                    if (bdist > 1)
+                    double bounceX = T.X + (P.X - T.X) * (cushionY - T.Y) / dy;
+                    if (bounceX >= 5 && bounceX <= this.Width - 5)
                     {
-                        Point ghostG = new Point(
-                            (int)(T.X - (bdx / bdist) * referenceBallSize),
-                            (int)(T.Y - (bdy / bdist) * referenceBallSize));
-                        
-                        // 1. FIRST AIM DIRECTION (Cue Ball -> Ghost Ball) -> RED
-                        DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                        Point c1Candidate = new Point((int)bounceX, cushionY);
+                        double dist1 = Math.Sqrt(Math.Pow(c1Candidate.X - T.X, 2) + Math.Pow(c1Candidate.Y - T.Y, 2));
+                        double dist2 = Math.Sqrt(Math.Pow(P.X - c1Candidate.X, 2) + Math.Pow(P.Y - c1Candidate.Y, 2));
+                        double totalDist = dist1 + dist2;
+                        if (totalDist < minTotalDist)
+                        {
+                            minTotalDist = totalDist;
+                            bestC1 = c1Candidate;
+                        }
                     }
-
-                    // 2. SECOND DIRECTION (Target Ball -> Rail 1) -> GREEN
-                    DrawDirectionalLine(g, T, C1, Color.Lime, 3);
-                    // 3. THIRD DIRECTION (Rail 1 -> Target Hole) -> BLUE
-                    DrawDirectionalLine(g, C1, P, Color.Cyan, 3);
-
-                    // Bounce Marker Target
-                    DrawBounceTarget(g, C1, "1", Color.Lime);
                 }
             }
-        }
 
-        private void Draw2CushionBounce(Graphics g, Point C, Point T, Point P, int cushion1Y, int cushion2X, Color col)
-        {
-            double mirP1x = 2.0 * cushion2X - P.X;
-            Point P1 = new Point((int)mirP1x, P.Y);
-            double mirP2y = 2.0 * cushion1Y - P1.Y;
-            Point P2 = new Point(P1.X, (int)mirP2y);
-
-            double dy = P2.Y - T.Y;
-            if (Math.Abs(dy) < 0.001) return;
-            double c1X = T.X + (P2.X - T.X) * (cushion1Y - T.Y) / dy;
-            if (c1X < 5 || c1X > this.Width - 5) return;
-            Point C1 = new Point((int)c1X, cushion1Y);
-
-            double dx = P1.X - C1.X;
-            if (Math.Abs(dx) < 0.001) return;
-            double c2Y = C1.Y + (P1.Y - C1.Y) * (cushion2X - C1.X) / dx;
-            if (c2Y < 5 || c2Y > this.Height - 5) return;
-            Point C2 = new Point(cushion2X, (int)c2Y);
-
-            // Ghost Ball G at Target Ball along vector to Rail 1
-            double bdx = C1.X - T.X;
-            double bdy = C1.Y - T.Y;
-            double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
-            if (bdist > 1)
+            // 2. Vertical Cushions (Left & Right)
+            int[] xCushions = new int[] { leftX, rightX };
+            foreach (int cushionX in xCushions)
             {
-                Point ghostG = new Point(
-                    (int)(T.X - (bdx / bdist) * referenceBallSize),
-                    (int)(T.Y - (bdy / bdist) * referenceBallSize));
-
-                // 1. FIRST AIM DIRECTION (Cue Ball -> Ghost Ball) -> RED
-                DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                double mirPx = 2.0 * cushionX - P.X;
+                double dx = mirPx - T.X;
+                if (Math.Abs(dx) >= 0.001)
+                {
+                    double bounceY = T.Y + (P.Y - T.Y) * (cushionX - T.X) / dx;
+                    if (bounceY >= 5 && bounceY <= this.Height - 5)
+                    {
+                        Point c1Candidate = new Point(cushionX, (int)bounceY);
+                        double dist1 = Math.Sqrt(Math.Pow(c1Candidate.X - T.X, 2) + Math.Pow(c1Candidate.Y - T.Y, 2));
+                        double dist2 = Math.Sqrt(Math.Pow(P.X - c1Candidate.X, 2) + Math.Pow(P.Y - c1Candidate.Y, 2));
+                        double totalDist = dist1 + dist2;
+                        if (totalDist < minTotalDist)
+                        {
+                            minTotalDist = totalDist;
+                            bestC1 = c1Candidate;
+                        }
+                    }
+                }
             }
 
-            // 2. SECOND DIRECTION (Target Ball -> Rail 1) -> GREEN
-            DrawDirectionalLine(g, T, C1, Color.Lime, 3);
-            // 3. THIRD DIRECTION (Rail 1 -> Rail 2) -> BLUE
-            DrawDirectionalLine(g, C1, C2, Color.Cyan, 3);
-            // 4. FOURTH DIRECTION (Rail 2 -> Target Hole) -> YELLOW
-            DrawDirectionalLine(g, C2, P, Color.Gold, 3);
+            if (!bestC1.IsEmpty)
+            {
+                // Render ONLY the single best 1-cushion bank shot!
+                double bdx = bestC1.X - T.X;
+                double bdy = bestC1.Y - T.Y;
+                double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
+                if (bdist > 1)
+                {
+                    Point ghostG = new Point(
+                        (int)(T.X - (bdx / bdist) * referenceBallSize),
+                        (int)(T.Y - (bdy / bdist) * referenceBallSize));
 
-            // Rail Bounce Markers
-            DrawBounceTarget(g, C1, "1", Color.Lime);
-            DrawBounceTarget(g, C2, "2", Color.Cyan);
+                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball)
+                    DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+
+                    // Ghost Ball Circle
+                    int halfBall = referenceBallSize / 2;
+                    Rectangle rectGhost = new Rectangle(ghostG.X - halfBall, ghostG.Y - halfBall, referenceBallSize, referenceBallSize);
+                    using (Pen ghostPen = new Pen(Color.FromArgb(200, Color.Lime), 2))
+                    {
+                        ghostPen.DashStyle = DashStyle.Dash;
+                        g.DrawEllipse(ghostPen, rectGhost);
+                    }
+                }
+
+                // 2. GREEN PATH (Target Ball -> Rail 1)
+                DrawDirectionalLine(g, T, bestC1, Color.Lime, 3);
+                // 3. BLUE PATH (Rail 1 -> Target Hole)
+                DrawDirectionalLine(g, bestC1, P, Color.Cyan, 3);
+
+                // Rail 1 Bounce Marker
+                DrawBounceTarget(g, bestC1, "1", Color.Lime);
+            }
         }
 
-        private void Draw3CushionBounce(Graphics g, Point C, Point T, Point P, int cushion1Y, int cushion2X, int cushion3Y, Color col)
+        private void DrawBest2CushionBounce(Graphics g, Point C, Point T, Point P)
         {
-            Point P1 = new Point(P.X, (int)(2.0 * cushion3Y - P.Y));
-            Point P2 = new Point((int)(2.0 * cushion2X - P1.X), P1.Y);
-            Point P3 = new Point(P2.X, (int)(2.0 * cushion1Y - P2.Y));
+            int ballRadius = referenceBallSize / 2;
+            int topY = ballRadius;
+            int botY = this.Height - ballRadius;
+            int leftX = ballRadius;
+            int rightX = this.Width - ballRadius;
 
-            double dy1 = P3.Y - T.Y;
-            if (Math.Abs(dy1) < 0.001) return;
-            double c1X = T.X + (P3.X - T.X) * (cushion1Y - T.Y) / dy1;
-            if (c1X < 5 || c1X > this.Width - 5) return;
-            Point C1 = new Point((int)c1X, cushion1Y);
+            Point bestC1 = Point.Empty;
+            Point bestC2 = Point.Empty;
+            double minTotalDist = double.MaxValue;
 
-            double dx2 = P2.X - C1.X;
-            if (Math.Abs(dx2) < 0.001) return;
-            double c2Y = C1.Y + (P2.Y - C1.Y) * (cushion2X - C1.X) / dx2;
-            if (c2Y < 5 || c2Y > this.Height - 5) return;
-            Point C2 = new Point(cushion2X, (int)c2Y);
+            int[,] pairs = new int[,] {
+                { topY, rightX },
+                { topY, leftX },
+                { botY, rightX },
+                { botY, leftX }
+            };
 
-            double dy3 = P1.Y - C2.Y;
-            if (Math.Abs(dy3) < 0.001) return;
-            double c3X = C2.X + (P1.X - C2.X) * (cushion3Y - C2.Y) / dy3;
-            if (c3X < 5 || c3X > this.Width - 5) return;
-            Point C3 = new Point((int)c3X, cushion3Y);
-
-            // Ghost Ball G at Target Ball along vector to Rail 1
-            double bdx = C1.X - T.X;
-            double bdy = C1.Y - T.Y;
-            double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
-            if (bdist > 1)
+            for (int i = 0; i < 4; i++)
             {
-                Point ghostG = new Point(
-                    (int)(T.X - (bdx / bdist) * referenceBallSize),
-                    (int)(T.Y - (bdy / bdist) * referenceBallSize));
+                int cushion1Y = pairs[i, 0];
+                int cushion2X = pairs[i, 1];
 
-                // 1. FIRST AIM DIRECTION (Cue Ball -> Ghost Ball) -> RED
-                DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+                double mirP1x = 2.0 * cushion2X - P.X;
+                Point P1 = new Point((int)mirP1x, P.Y);
+                double mirP2y = 2.0 * cushion1Y - P1.Y;
+                Point P2 = new Point(P1.X, (int)mirP2y);
+
+                double dy = P2.Y - T.Y;
+                if (Math.Abs(dy) < 0.001) continue;
+                double c1X = T.X + (P2.X - T.X) * (cushion1Y - T.Y) / dy;
+                if (c1X < 5 || c1X > this.Width - 5) continue;
+                Point C1Candidate = new Point((int)c1X, cushion1Y);
+
+                double dx = P1.X - C1Candidate.X;
+                if (Math.Abs(dx) < 0.001) continue;
+                double c2Y = C1Candidate.Y + (P1.Y - C1Candidate.Y) * (cushion2X - C1Candidate.X) / dx;
+                if (c2Y < 5 || c2Y > this.Height - 5) continue;
+                Point C2Candidate = new Point(cushion2X, (int)c2Y);
+
+                double dist1 = Math.Sqrt(Math.Pow(C1Candidate.X - T.X, 2) + Math.Pow(C1Candidate.Y - T.Y, 2));
+                double dist2 = Math.Sqrt(Math.Pow(C2Candidate.X - C1Candidate.X, 2) + Math.Pow(C2Candidate.Y - C1Candidate.Y, 2));
+                double dist3 = Math.Sqrt(Math.Pow(P.X - C2Candidate.X, 2) + Math.Pow(P.Y - C2Candidate.Y, 2));
+                double totalDist = dist1 + dist2 + dist3;
+
+                if (totalDist < minTotalDist)
+                {
+                    minTotalDist = totalDist;
+                    bestC1 = C1Candidate;
+                    bestC2 = C2Candidate;
+                }
             }
 
-            // 2. SECOND DIRECTION (Target Ball -> Rail 1) -> GREEN
-            DrawDirectionalLine(g, T, C1, Color.Lime, 3);
-            // 3. THIRD DIRECTION (Rail 1 -> Rail 2) -> BLUE
-            DrawDirectionalLine(g, C1, C2, Color.Cyan, 3);
-            // 4. FOURTH DIRECTION (Rail 2 -> Rail 3) -> MAGENTA
-            DrawDirectionalLine(g, C2, C3, Color.Magenta, 3);
-            // 5. FIFTH DIRECTION (Rail 3 -> Target Hole) -> YELLOW
-            DrawDirectionalLine(g, C3, P, Color.Gold, 3);
+            if (!bestC1.IsEmpty && !bestC2.IsEmpty)
+            {
+                double bdx = bestC1.X - T.X;
+                double bdy = bestC1.Y - T.Y;
+                double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
+                if (bdist > 1)
+                {
+                    Point ghostG = new Point(
+                        (int)(T.X - (bdx / bdist) * referenceBallSize),
+                        (int)(T.Y - (bdy / bdist) * referenceBallSize));
 
-            // Rail Bounce Markers
-            DrawBounceTarget(g, C1, "1", Color.Lime);
-            DrawBounceTarget(g, C2, "2", Color.Cyan);
-            DrawBounceTarget(g, C3, "3", Color.Magenta);
+                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball)
+                    DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+
+                    // Ghost Ball Circle
+                    int halfBall = referenceBallSize / 2;
+                    Rectangle rectGhost = new Rectangle(ghostG.X - halfBall, ghostG.Y - halfBall, referenceBallSize, referenceBallSize);
+                    using (Pen ghostPen = new Pen(Color.FromArgb(200, Color.Lime), 2))
+                    {
+                        ghostPen.DashStyle = DashStyle.Dash;
+                        g.DrawEllipse(ghostPen, rectGhost);
+                    }
+                }
+
+                // 2. GREEN PATH (Target Ball -> Rail 1)
+                DrawDirectionalLine(g, T, bestC1, Color.Lime, 3);
+                // 3. BLUE PATH (Rail 1 -> Rail 2)
+                DrawDirectionalLine(g, bestC1, bestC2, Color.Cyan, 3);
+                // 4. YELLOW PATH (Rail 2 -> Target Hole)
+                DrawDirectionalLine(g, bestC2, P, Color.Gold, 3);
+
+                // Rail Bounce Markers
+                DrawBounceTarget(g, bestC1, "1", Color.Lime);
+                DrawBounceTarget(g, bestC2, "2", Color.Cyan);
+            }
+        }
+
+        private void DrawBest3CushionBounce(Graphics g, Point C, Point T, Point P)
+        {
+            int ballRadius = referenceBallSize / 2;
+            int topY = ballRadius;
+            int botY = this.Height - ballRadius;
+            int leftX = ballRadius;
+            int rightX = this.Width - ballRadius;
+
+            Point bestC1 = Point.Empty;
+            Point bestC2 = Point.Empty;
+            Point bestC3 = Point.Empty;
+            double minTotalDist = double.MaxValue;
+
+            int[,] pairs = new int[,] {
+                { topY, rightX, botY },
+                { topY, leftX, botY },
+                { botY, rightX, topY },
+                { botY, leftX, topY }
+            };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int cushion1Y = pairs[i, 0];
+                int cushion2X = pairs[i, 1];
+                int cushion3Y = pairs[i, 2];
+
+                Point P1 = new Point(P.X, (int)(2.0 * cushion3Y - P.Y));
+                Point P2 = new Point((int)(2.0 * cushion2X - P1.X), P1.Y);
+                Point P3 = new Point(P2.X, (int)(2.0 * cushion1Y - P2.Y));
+
+                double dy1 = P3.Y - T.Y;
+                if (Math.Abs(dy1) < 0.001) continue;
+                double c1X = T.X + (P3.X - T.X) * (cushion1Y - T.Y) / dy1;
+                if (c1X < 5 || c1X > this.Width - 5) continue;
+                Point C1Candidate = new Point((int)c1X, cushion1Y);
+
+                double dx2 = P2.X - C1Candidate.X;
+                if (Math.Abs(dx2) < 0.001) continue;
+                double c2Y = C1Candidate.Y + (P2.Y - C1Candidate.Y) * (cushion2X - C1Candidate.X) / dx2;
+                if (c2Y < 5 || c2Y > this.Height - 5) continue;
+                Point C2Candidate = new Point(cushion2X, (int)c2Y);
+
+                double dy3 = P1.Y - C2Candidate.Y;
+                if (Math.Abs(dy3) < 0.001) continue;
+                double c3X = C2Candidate.X + (P1.X - C2Candidate.X) * (cushion3Y - C2Candidate.Y) / dy3;
+                if (c3X < 5 || c3X > this.Width - 5) continue;
+                Point C3Candidate = new Point((int)c3X, cushion3Y);
+
+                double dist1 = Math.Sqrt(Math.Pow(C1Candidate.X - T.X, 2) + Math.Pow(C1Candidate.Y - T.Y, 2));
+                double dist2 = Math.Sqrt(Math.Pow(C2Candidate.X - C1Candidate.X, 2) + Math.Pow(C2Candidate.Y - C1Candidate.Y, 2));
+                double dist3 = Math.Sqrt(Math.Pow(C3Candidate.X - C2Candidate.X, 2) + Math.Pow(C3Candidate.Y - C2Candidate.Y, 2));
+                double dist4 = Math.Sqrt(Math.Pow(P.X - C3Candidate.X, 2) + Math.Pow(P.Y - C3Candidate.Y, 2));
+                double totalDist = dist1 + dist2 + dist3 + dist4;
+
+                if (totalDist < minTotalDist)
+                {
+                    minTotalDist = totalDist;
+                    bestC1 = C1Candidate;
+                    bestC2 = C2Candidate;
+                    bestC3 = C3Candidate;
+                }
+            }
+
+            if (!bestC1.IsEmpty && !bestC2.IsEmpty && !bestC3.IsEmpty)
+            {
+                double bdx = bestC1.X - T.X;
+                double bdy = bestC1.Y - T.Y;
+                double bdist = Math.Sqrt(bdx * bdx + bdy * bdy);
+                if (bdist > 1)
+                {
+                    Point ghostG = new Point(
+                        (int)(T.X - (bdx / bdist) * referenceBallSize),
+                        (int)(T.Y - (bdy / bdist) * referenceBallSize));
+
+                    // 1. RED AIM LINE (Cue Ball -> Ghost Ball)
+                    DrawDirectionalLine(g, C, ghostG, Color.Red, 3);
+
+                    // Ghost Ball Circle
+                    int halfBall = referenceBallSize / 2;
+                    Rectangle rectGhost = new Rectangle(ghostG.X - halfBall, ghostG.Y - halfBall, referenceBallSize, referenceBallSize);
+                    using (Pen ghostPen = new Pen(Color.FromArgb(200, Color.Lime), 2))
+                    {
+                        ghostPen.DashStyle = DashStyle.Dash;
+                        g.DrawEllipse(ghostPen, rectGhost);
+                    }
+                }
+
+                // 2. GREEN PATH (Target Ball -> Rail 1)
+                DrawDirectionalLine(g, T, bestC1, Color.Lime, 3);
+                // 3. BLUE PATH (Rail 1 -> Rail 2)
+                DrawDirectionalLine(g, bestC1, bestC2, Color.Cyan, 3);
+                // 4. MAGENTA PATH (Rail 2 -> Rail 3)
+                DrawDirectionalLine(g, bestC2, bestC3, Color.Magenta, 3);
+                // 5. YELLOW PATH (Rail 3 -> Target Hole)
+                DrawDirectionalLine(g, bestC3, P, Color.Gold, 3);
+
+                // Rail Bounce Markers
+                DrawBounceTarget(g, bestC1, "1", Color.Lime);
+                DrawBounceTarget(g, bestC2, "2", Color.Cyan);
+                DrawBounceTarget(g, bestC3, "3", Color.Magenta);
+            }
         }
 
         private void FormMain_MouseUp(object sender, MouseEventArgs e)
