@@ -41,6 +41,10 @@ namespace _8BallPool
         private const int VK_OEM_6 = 0xDD; // ']' key for higher opacity (+5%)
         private const int VK_0 = 0x30;
         private const int VK_1 = 0x31;
+        private const int VK_OEM_PLUS = 0xBB; // '+' / '=' key to increase ball size
+        private const int VK_OEM_MINUS = 0xBD; // '-' / '_' key to decrease ball size
+        private const int VK_ADD = 0x6B; // Numpad '+'
+        private const int VK_SUBTRACT = 0x6D; // Numpad '-'
 
         private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
         private LowLevelMouseProc _mouseProc;
@@ -92,7 +96,13 @@ namespace _8BallPool
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr GetModuleHandle(string lpModuleName);
 
-        private const int ReferenceBallSize = 25;
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        private int referenceBallSize = 23;
         private const int BallCenterDotSize = 2;
         private const int BallHitAreaRadius = 15;
         private const int CornerLineLength = 40;
@@ -142,7 +152,43 @@ namespace _8BallPool
         private bool wasODown;
         private bool wasLBracketDown;
         private bool wasRBracketDown;
+        private bool wasPlusDown;
+        private bool wasMinusDown;
         private bool[] wasNumDown = new bool[7];
+
+        private DateTime hudMessageTime = DateTime.MinValue;
+        private string hudMessageText = "";
+
+        private bool IsTargetWindowFocused()
+        {
+            try
+            {
+                IntPtr hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero) return false;
+                if (hwnd == this.Handle) return true;
+
+                uint processId;
+                GetWindowThreadProcessId(hwnd, out processId);
+                if (processId == 0) return false;
+
+                using (Process proc = Process.GetProcessById((int)processId))
+                {
+                    string procName = proc.ProcessName;
+                    if (procName.Equals("librewolf", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private void ShowHUD(string message)
+        {
+            hudMessageText = message;
+            hudMessageTime = DateTime.Now.AddSeconds(2.5);
+        }
 
         private Timer updateTimer;
         private string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "guideline_config.txt");
@@ -188,6 +234,12 @@ namespace _8BallPool
         {
             if (nCode >= 0)
             {
+                if (!IsTargetWindowFocused())
+                {
+                    isRightHookDown = false;
+                    return CallNextHookEx(_hookID, nCode, wParam, lParam);
+                }
+
                 int msg = wParam.ToInt32();
                 if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP || msg == WM_MOUSEMOVE)
                 {
@@ -272,7 +324,8 @@ namespace _8BallPool
                     "Opacity=" + this.Opacity.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
                     "Theme=" + currentThemeIndex,
                     "CushionMode=" + cushionMode,
-                    "TargetPocket=" + targetPocketSelection
+                    "TargetPocket=" + targetPocketSelection,
+                    "BallSize=" + referenceBallSize
                 };
                 File.WriteAllLines(configPath, lines);
             }
@@ -309,6 +362,7 @@ namespace _8BallPool
                     else if (key == "Theme" && int.TryParse(val, out intVal)) { currentThemeIndex = Math.Max(0, Math.Min(ThemeColors.Length - 1, intVal)); }
                     else if (key == "CushionMode" && int.TryParse(val, out intVal)) { cushionMode = Math.Max(0, Math.Min(3, intVal)); }
                     else if (key == "TargetPocket" && int.TryParse(val, out intVal)) { targetPocketSelection = Math.Max(-1, Math.Min(5, intVal)); }
+                    else if ((key == "BallSize" || key == "ReferenceBallSize") && int.TryParse(val, out intVal)) { referenceBallSize = Math.Max(8, Math.Min(60, intVal)); }
                 }
 
                 this.Size = new Size(w, h);
@@ -339,6 +393,26 @@ namespace _8BallPool
 
         private void UpdateTimer_Tick(object sender, EventArgs e)
         {
+            if (!IsTargetWindowFocused())
+            {
+                wasSpaceDown = false;
+                wasF1Down = false;
+                wasUpDown = false;
+                wasDownDown = false;
+                wasLeftDown = false;
+                wasRightKey = false;
+                wasTDown = false;
+                wasBDown = false;
+                wasPDown = false;
+                wasODown = false;
+                wasLBracketDown = false;
+                wasRBracketDown = false;
+                wasPlusDown = false;
+                wasMinusDown = false;
+                for (int i = 0; i < wasNumDown.Length; i++) wasNumDown[i] = false;
+                return;
+            }
+
             bool isCtrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             bool isShiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
             bool isAltDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
@@ -411,6 +485,28 @@ namespace _8BallPool
             wasLeftDown = isLeftDown;
             wasRightKey = isRightKey;
 
+            // '+' / '-' or Numpad '+' / '-' to adjust Reference Ball Size
+            bool isPlusDown = ((GetAsyncKeyState(VK_OEM_PLUS) & 0x8000) != 0) || ((GetAsyncKeyState(VK_ADD) & 0x8000) != 0);
+            bool isMinusDown = ((GetAsyncKeyState(VK_OEM_MINUS) & 0x8000) != 0) || ((GetAsyncKeyState(VK_SUBTRACT) & 0x8000) != 0);
+
+            if (isPlusDown && !wasPlusDown)
+            {
+                referenceBallSize = Math.Min(60, referenceBallSize + 1);
+                ShowHUD("Ball Size: " + referenceBallSize + "px");
+                SaveConfig();
+                this.Invalidate();
+            }
+            wasPlusDown = isPlusDown;
+
+            if (isMinusDown && !wasMinusDown)
+            {
+                referenceBallSize = Math.Max(8, referenceBallSize - 1);
+                ShowHUD("Ball Size: " + referenceBallSize + "px");
+                SaveConfig();
+                this.Invalidate();
+            }
+            wasMinusDown = isMinusDown;
+
             // '[' Key: Lower Opacity by 5%
             bool isLBracketDown = (GetAsyncKeyState(VK_OEM_4) & 0x8000) != 0;
             if (isLBracketDown && !wasLBracketDown)
@@ -444,6 +540,7 @@ namespace _8BallPool
                 double op = Math.Round(this.Opacity + 0.20D, 2);
                 if (op > 1.0D) op = 0.40D;
                 this.Opacity = op;
+                ShowHUD("Opacity: " + (int)(this.Opacity * 100) + "%");
                 SaveConfig();
                 this.Invalidate();
             }
@@ -454,6 +551,7 @@ namespace _8BallPool
             if (isTDown && !wasTDown)
             {
                 currentThemeIndex = (currentThemeIndex + 1) % ThemeColors.Length;
+                ShowHUD("Theme: " + ThemeNames[currentThemeIndex]);
                 SaveConfig();
                 this.Invalidate();
             }
@@ -464,6 +562,8 @@ namespace _8BallPool
             if (isBDown && !wasBDown)
             {
                 cushionMode = (cushionMode + 1) % 4;
+                string modeTxt = cushionMode == 0 ? "Off" : (cushionMode + "-Cushion");
+                ShowHUD("Bounce Mode: " + modeTxt);
                 SaveConfig();
                 this.Invalidate();
             }
@@ -600,6 +700,27 @@ namespace _8BallPool
 
             DrawGhostBall(g, themeColor, activeTargetPocket);
             DrawBall(g, themeColor);
+
+            // Draw HUD overlay notification if active
+            if (DateTime.Now < hudMessageTime && !string.IsNullOrEmpty(hudMessageText))
+            {
+                using (Font font = new Font("Segoe UI", 10, FontStyle.Bold))
+                using (Brush bgBrush = new SolidBrush(Color.FromArgb(220, 20, 20, 20)))
+                using (Pen borderPen = new Pen(themeColor, 1.5f))
+                using (Brush textBrush = new SolidBrush(Color.White))
+                {
+                    SizeF size = g.MeasureString(hudMessageText, font);
+                    int hudW = (int)size.Width + 24;
+                    int hudH = (int)size.Height + 12;
+                    int hudX = (this.Width - hudW) / 2;
+                    int hudY = this.Height - hudH - 20;
+
+                    Rectangle hudRect = new Rectangle(hudX, hudY, hudW, hudH);
+                    g.FillRectangle(bgBrush, hudRect);
+                    g.DrawRectangle(borderPen, hudRect);
+                    g.DrawString(hudMessageText, font, textBrush, hudX + 12, hudY + 6);
+                }
+            }
         }
 
         private void DrawCorners(Graphics g, Color themeColor)
@@ -668,10 +789,10 @@ namespace _8BallPool
         private void DrawBall(Graphics g, Color themeColor)
         {
             Point pt = lastBallPosition;
-            int halfBall = ReferenceBallSize / 2;
+            int halfBall = referenceBallSize / 2;
             int halfDot = BallCenterDotSize / 2;
 
-            Rectangle rectOutside = new Rectangle(pt.X - halfBall, pt.Y - halfBall, ReferenceBallSize, ReferenceBallSize);
+            Rectangle rectOutside = new Rectangle(pt.X - halfBall, pt.Y - halfBall, referenceBallSize, referenceBallSize);
             Rectangle rectInside = new Rectangle(pt.X - halfDot, pt.Y - halfDot, BallCenterDotSize, BallCenterDotSize);
 
             using (Pen penOutside = new Pen(themeColor, 2))
@@ -711,8 +832,8 @@ namespace _8BallPool
             int ghostX = (int)(lastBallPosition.X + ux * ghostDist);
             int ghostY = (int)(lastBallPosition.Y + uy * ghostDist);
 
-            int halfBall = ReferenceBallSize / 2;
-            Rectangle rectGhost = new Rectangle(ghostX - halfBall, ghostY - halfBall, ReferenceBallSize, ReferenceBallSize);
+            int halfBall = referenceBallSize / 2;
+            Rectangle rectGhost = new Rectangle(ghostX - halfBall, ghostY - halfBall, referenceBallSize, referenceBallSize);
 
             using (Pen ghostPen = new Pen(Color.FromArgb(180, themeColor), 2))
             {
@@ -779,11 +900,11 @@ namespace _8BallPool
             Point ball = lastBallPosition;
             Point target = Pocket.GetPoint(targetPos);
 
-            int ballRadius = ReferenceBallSize / 2; // 12px physical collision offset
-            int topY = 12;
-            int botY = this.Height - 12;
-            int leftX = 12;
-            int rightX = this.Width - 12;
+            int ballRadius = referenceBallSize / 2;
+            int topY = ballRadius;
+            int botY = this.Height - ballRadius;
+            int leftX = ballRadius;
+            int rightX = this.Width - ballRadius;
 
             // Mode 1: 1-Cushion Trick Shots
             if (cushionMode == 1)
